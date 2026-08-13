@@ -1,0 +1,3289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="A shareable board for the Turing Machine deduction game: build a puzzle from your own criteria cards and send the code to your friends.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#eef2ee">
+<title>Turing Machine — play together</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2314ae5c'/%3E%3Cpath d='M16 7 25 25H7Z' fill='%23ffffff'/%3E%3C/svg%3E">
+</head>
+<body>
+
+<script>
+/* Stamp the theme before first paint so no colour depends on an un-stamped
+   default and nothing flashes. Light unless the player chose otherwise. */
+(function () {
+  var t = 'light';
+  try { t = localStorage.getItem('turing:theme') || 'light'; } catch (e) {}
+  document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
+})();
+</script>
+
+<div id="root" class="app"></div>
+<noscript>
+  <div class="app" style="padding-top:40px">
+    <h1 style="text-transform:uppercase">Turing Machine</h1>
+    <p style="color:var(--ink-dim);max-width:52ch">
+      This board runs entirely in your browser, so it needs JavaScript switched on.
+    </p>
+  </div>
+</noscript>
+
+<style>
+/* ==========================================================================
+   TURING MACHINE
+   Light by default, after the game's own look: white card stock, its green,
+   and the blue of the verification numbers. Dark is the same design inverted.
+   The theme is always stamped on <html data-theme>, so no colour depends on
+   an un-stamped default.
+   ========================================================================== */
+
+:root,
+:root[data-theme="light"] {
+  --paper:      #ffffff;
+  --ground:     #eef2ee;   /* neutral pulled slightly toward the brand green */
+  --sunk:       #f6f8f6;
+  --raised:     #ffffff;
+
+  --line:       #dde5df;
+  --line-firm:  #c4d0c7;
+
+  --ink:        #0f1613;
+  --ink-dim:    #5d6b63;
+  --ink-faint:  #647169;
+
+  --brand:      #14ae5c;   /* the box's green — rules, lamps, borders, marks */
+  --brand-fill: #0c8547;   /* the same green, deep enough to carry white text */
+  --brand-deep: #0c7f42;   /* text and borders on white */
+  --brand-wash: #e6f6ed;
+  --brand-on:   #ffffff;
+
+  --verify:     #2266c4;   /* the blue the site prints verification numbers in */
+  --verify-wash:#e8f0fb;
+
+  --pass:       #14ae5c;
+  --pass-wash:  #e6f6ed;
+  --fail:       #c92e20;
+  --fail-wash:  #fdeceb;
+
+  --blue:       #2a68d8;  --blue-fill:   #2a68d8;  --blue-on:   #ffffff;
+  --yellow:     #8d6600;  --yellow-fill: #f2c218;  --yellow-on: #2a1f00;
+  --purple:     #7a44cf;  --purple-fill: #8450dd;  --purple-on: #ffffff;
+
+  --scrim:      rgba(15, 22, 19, .45);
+  --gl-shade:   #000;   /* icon outlines darken on a light ground */
+  --shadow-sm:  0 1px 2px rgba(15, 32, 22, .07);
+  --shadow-md:  0 2px 4px rgba(15, 32, 22, .06), 0 12px 24px -16px rgba(15, 32, 22, .3);
+  --shadow-lg:  0 30px 70px -28px rgba(15, 32, 22, .45);
+  --key-shadow: 0 2px 0 var(--line-firm);
+
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --paper:      #151b18;
+  --ground:     #0d1210;
+  --sunk:       #0a0f0d;
+  --raised:     #1b2320;
+
+  --line:       #26302b;
+  --line-firm:  #36433c;
+
+  --ink:        #e8efea;
+  --ink-dim:    #9aa9a1;
+  --ink-faint:  #83938a;
+
+  --brand:      #2fd47f;
+  --brand-fill: #2fd47f;
+  --brand-deep: #52e39c;
+  --brand-wash: #12291d;
+  --brand-on:   #04170d;
+
+  --verify:     #6aa8f5;
+  --verify-wash:#131f30;
+
+  --pass:       #2fd47f;
+  --pass-wash:  #12291d;
+  --fail:       #f2695a;
+  --fail-wash:  #2c1614;
+
+  --blue:       #6ea4ff;  --blue-fill:   #4785f5;  --blue-on:   #04122c;
+  --yellow:     #f0c94a;  --yellow-fill: #edc033;  --yellow-on: #2a1f00;
+  --purple:     #b98bf5;  --purple-fill: #9a63ec;  --purple-on: #12042c;
+
+  --scrim:      rgba(0, 0, 0, .62);
+  --gl-shade:   #fff;   /* …and lighten on a dark one */
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-md:  0 2px 4px rgba(0, 0, 0, .35), 0 14px 28px -18px rgba(0, 0, 0, .9);
+  --shadow-lg:  0 34px 80px -30px rgba(0, 0, 0, .95);
+  --key-shadow: 0 2px 0 rgba(0, 0, 0, .5);
+
+  color-scheme: dark;
+}
+
+:root {
+  --font-ui: "Avenir Next", Avenir, Futura, "Century Gothic", "Trebuchet MS",
+             "Segoe UI", Tahoma, sans-serif;
+  --font-num: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco,
+              "Cascadia Mono", "Roboto Mono", "DejaVu Sans Mono", Consolas, monospace;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+}
+
+/* ---------- base ---------- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--ground);
+  background-image:
+    radial-gradient(circle, color-mix(in srgb, var(--ink) 7%, transparent) 1px, transparent 1.4px);
+  background-size: 26px 26px;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: none; padding: 0; }
+button:disabled { cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--brand-deep); outline-offset: 2px; border-radius: 3px; }
+
+h1, h2, h3, h4 { margin: 0; font-weight: 700; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.app { max-width: 1240px; margin: 0 auto; padding: 0 20px 96px; }
+
+/* ---------- masthead ---------- */
+
+.masthead {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap;
+  padding: 26px 0 18px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid var(--line);
+}
+.wordmark { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.wordmark h1 {
+  font-size: clamp(19px, 3vw, 26px);
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.wordmark .rule { width: 30px; height: 4px; border-radius: var(--r-pill); background: var(--brand); }
+.wordmark .tag {
+  font-size: 10px; font-weight: 700; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.masthead-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.theme-toggle {
+  display: grid; place-items: center;
+  width: 34px; height: 34px; flex: none;
+  font-size: 15px; line-height: 1;
+  color: var(--ink-dim);
+  background: var(--raised);
+  border: 1.5px solid var(--line-firm);
+  border-radius: var(--r-pill);
+  transition: color .15s ease, border-color .15s ease, background .15s ease;
+}
+.theme-toggle:hover { color: var(--brand-deep); border-color: var(--brand); background: var(--brand-wash); }
+
+/* ---------- buttons ---------- */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 20px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink);
+  background: var(--raised);
+  border: 1.5px solid var(--line-firm);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-sm);
+  transition: transform .12s ease, box-shadow .15s ease, background .15s ease,
+              color .15s ease, border-color .15s ease;
+}
+.btn:hover:not(:disabled) { border-color: var(--brand); color: var(--brand-deep); background: var(--brand-wash); }
+.btn:active:not(:disabled) { transform: translateY(1px); box-shadow: none; }
+.btn:disabled { opacity: .55; }
+
+.btn-primary { color: var(--brand-on); background: var(--brand-fill); border-color: var(--brand-fill); }
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-deep); border-color: var(--brand-deep); color: var(--brand-on);
+}
+.btn-ghost { background: transparent; box-shadow: none; border-color: var(--line-firm); color: var(--ink-dim); }
+.btn-ghost:hover:not(:disabled) { background: var(--brand-wash); }
+.btn-sm { padding: 7px 14px; font-size: 10.5px; }
+
+/* ---------- panels ---------- */
+
+.panel {
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 20px;
+  background: var(--sunk);
+  border-bottom: 1.5px solid var(--line);
+}
+.panel-title {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--brand-deep);
+}
+.panel-title::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--brand); }
+.panel-body { padding: 20px; }
+
+.hint { font-size: 14px; color: var(--ink-dim); line-height: 1.6; }
+.hint em { color: var(--brand-deep); font-style: normal; font-weight: 700; }
+.hint b { color: var(--ink); }
+
+.tape { height: 2px; background: repeating-linear-gradient(90deg, var(--line-firm) 0 6px, transparent 6px 12px); }
+
+/* ==========================================================================
+   SETUP
+   ========================================================================== */
+
+.setup { display: grid; gap: 20px; }
+
+.hero {
+  padding: 38px 34px;
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-left: 6px solid var(--brand);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-md);
+}
+.hero h2 {
+  font-size: clamp(23px, 3.6vw, 34px);
+  line-height: 1.15; letter-spacing: -.02em;
+  color: var(--ink);
+  max-width: 21ch;
+  text-wrap: balance;
+}
+.hero p { margin: 14px 0 0; max-width: 62ch; font-size: 16px; color: var(--ink-dim); }
+
+.setup-grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+
+.field { display: grid; gap: 7px; margin-bottom: 18px; }
+.field:last-child { margin-bottom: 0; }
+.field label {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.input, select.input, textarea.input {
+  width: 100%;
+  padding: 11px 13px;
+  background: var(--sunk);
+  border: 1.5px solid var(--line-firm);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+}
+.input::placeholder { color: var(--ink-faint); }
+.input:focus {
+  outline: none; background: var(--paper);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-wash);
+}
+.input.code-input {
+  font-family: var(--font-num);
+  font-size: 17px; letter-spacing: .16em; text-align: center; text-transform: uppercase;
+}
+
+.seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.seg button {
+  padding: 8px 15px;
+  font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-dim);
+  background: var(--sunk);
+  border: 1.5px solid var(--line-firm);
+  border-radius: var(--r-pill);
+  transition: all .15s ease;
+}
+.seg button:hover:not([aria-pressed="true"]) { color: var(--ink); border-color: var(--brand); }
+.seg button[aria-pressed="true"] { background: var(--brand-fill); border-color: var(--brand-fill); color: var(--brand-on); }
+
+.card-picker {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 6px; margin-top: 4px;
+}
+.card-chip {
+  aspect-ratio: 1; display: grid; place-items: center;
+  font-family: var(--font-num); font-size: 13px;
+  color: var(--ink-dim);
+  background: var(--sunk);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  transition: all .13s ease;
+}
+.card-chip:hover { border-color: var(--brand); color: var(--brand-deep); }
+.card-chip[aria-pressed="true"] {
+  background: var(--brand-fill); border-color: var(--brand-fill); color: var(--brand-on); font-weight: 700;
+}
+
+.status-line {
+  margin-top: 14px; padding: 11px 14px;
+  font-size: 13.5px;
+  color: var(--brand-deep);
+  background: var(--brand-wash);
+  border: 1.5px solid color-mix(in srgb, var(--brand) 35%, transparent);
+  border-radius: var(--r-sm);
+}
+.status-line.bad {
+  color: var(--fail); background: var(--fail-wash);
+  border-color: color-mix(in srgb, var(--fail) 35%, transparent);
+}
+
+/* ---------- official puzzle importer ---------- */
+
+.paste-box { margin-bottom: 16px; }
+.paste-box textarea.input {
+  min-height: 96px; resize: vertical;
+  font-family: var(--font-num); font-size: 13px; line-height: 1.5;
+}
+.paste-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+
+.official-grid { display: grid; gap: 7px; margin-top: 4px; }
+.official-head, .official-row {
+  display: grid; grid-template-columns: 28px 1fr 1fr 28px; gap: 9px; align-items: center;
+}
+.official-head span {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.official-letter {
+  display: grid; place-items: center;
+  width: 26px; height: 26px;
+  font-size: 11.5px; font-weight: 700;
+  color: var(--brand-on); background: var(--brand-fill);
+  border-radius: var(--r-sm);
+}
+.official-row .input {
+  padding: 9px 10px; text-align: center;
+  font-family: var(--font-num); letter-spacing: .06em;
+}
+/* the verification column, in the blue the site uses for it */
+.official-row .input[data-k="1"] {
+  color: var(--verify);
+  background: var(--verify-wash);
+  border-color: color-mix(in srgb, var(--verify) 40%, transparent);
+}
+.official-row .input[data-k="1"]:focus {
+  border-color: var(--verify);
+  box-shadow: 0 0 0 3px var(--verify-wash);
+}
+.official-drop {
+  width: 26px; height: 26px; display: grid; place-items: center;
+  font-size: 16px; line-height: 1; color: var(--ink-faint);
+  border: 1.5px solid var(--line); border-radius: var(--r-sm);
+  transition: all .15s ease;
+}
+.official-drop:hover { color: var(--fail); border-color: var(--fail); background: var(--fail-wash); }
+
+/* ==========================================================================
+   GAME
+   ========================================================================== */
+
+.game { display: grid; gap: 20px; }
+
+.strip {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1.5px;
+  background: var(--line);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.strip-cell { padding: 12px 16px; background: var(--paper); }
+.strip-cell dt {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.strip-cell dd {
+  margin: 3px 0 0;
+  font-family: var(--font-num); font-size: 20px;
+  color: var(--brand-deep); font-variant-numeric: tabular-nums;
+}
+.strip-cell.wide dd { font-size: 13px; color: var(--ink); letter-spacing: .1em; word-break: break-all; }
+
+/* ---------- verifier rack ---------- */
+
+.rack { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 14px; }
+
+.verifier {
+  display: flex; flex-direction: column;
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.verifier.stagger { animation: rise .45s cubic-bezier(.2,.7,.3,1) backwards; }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+
+.verifier.is-yes { border-color: color-mix(in srgb, var(--pass) 55%, transparent); }
+.verifier.is-no  { border-color: color-mix(in srgb, var(--fail) 55%, transparent); }
+.verifier.is-solved { border-color: var(--line-firm); }
+
+.verifier-top {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 13px;
+  background: var(--sunk);
+  border-bottom: 1.5px solid var(--line);
+}
+.verifier-letter {
+  width: 28px; height: 28px; flex: none;
+  display: grid; place-items: center;
+  font-size: 13px; font-weight: 700;
+  color: var(--brand-on); background: var(--brand-fill);
+  border-radius: var(--r-sm);
+}
+.verifier-no {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.verifier-no b {
+  display: block; font-family: var(--font-num); font-size: 15px;
+  letter-spacing: 0; color: var(--ink);
+}
+
+.lamp {
+  margin-left: auto; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--sunk); border: 1.5px solid var(--line-firm);
+  transition: all .25s ease;
+}
+.lamp.yes { background: var(--brand-fill); border-color: var(--brand-fill); }
+.lamp.no  { background: var(--fail); border-color: var(--fail); }
+
+.verifier-question { padding: 13px; font-size: 14.5px; line-height: 1.45; color: var(--ink); flex: 1; }
+
+.verifier-foot { padding: 0 13px 13px; display: grid; gap: 8px; }
+.test-btn { width: 100%; }
+
+.test-result {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px; border-radius: var(--r-pill);
+  font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  border: 1.5px solid transparent;
+}
+.test-result.fresh { animation: stamp .34s cubic-bezier(.2,1.4,.4,1); }
+@keyframes stamp { from { transform: scale(1.14); opacity: 0; } }
+.test-result.yes {
+  background: var(--pass-wash); color: var(--brand-deep);
+  border-color: color-mix(in srgb, var(--pass) 40%, transparent);
+}
+.test-result.no {
+  background: var(--fail-wash); color: var(--fail);
+  border-color: color-mix(in srgb, var(--fail) 40%, transparent);
+}
+/* the placeholder a finished board shows where the Test button used to be */
+.test-result.revealed {
+  background: var(--sunk); color: var(--ink-dim);
+  border-color: var(--line-firm);
+}
+
+.notes-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 7px 10px;
+  font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-faint);
+  border: 1.5px solid var(--line); border-radius: var(--r-sm);
+  transition: all .15s ease;
+}
+.notes-toggle:hover { color: var(--brand-deep); border-color: var(--brand); }
+.notes-toggle .count { font-family: var(--font-num); color: var(--ink-dim); }
+
+.variants { display: grid; gap: 4px; padding: 2px 0; }
+.variant {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 7px 9px; text-align: left;
+  font-size: 13.5px; line-height: 1.35;
+  color: var(--ink-dim);
+  background: var(--sunk);
+  border: 1.5px solid transparent; border-radius: var(--r-sm);
+  transition: all .13s ease;
+}
+.variant:hover { color: var(--ink); border-color: var(--line-firm); }
+.variant .mark {
+  flex: none; width: 15px; height: 15px; margin-top: 2px;
+  display: grid; place-items: center;
+  font-family: var(--font-num); font-size: 10px;
+  border: 1.5px solid var(--line-firm); border-radius: 3px;
+  color: transparent;
+}
+.variant.struck { color: var(--ink-faint); text-decoration: line-through; }
+.variant.struck .mark { color: var(--fail); border-color: var(--fail); }
+.variant.auto-struck { color: var(--ink-faint); text-decoration: line-through; opacity: .9; }
+.variant.auto-struck .mark { color: var(--ink-faint); }
+.variant.revealed {
+  color: var(--brand-deep); background: var(--brand-wash);
+  border-color: var(--brand); text-decoration: none; font-weight: 700;
+}
+.variant.revealed .mark { color: var(--brand-deep); border-color: var(--brand); }
+
+/* ---------- console ---------- */
+
+.lower { display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); gap: 20px; align-items: start; }
+
+.dials { display: grid; gap: 13px; }
+.dial-row { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 12px; }
+.dial-label { display: flex; align-items: center; gap: 8px; }
+.dial-label .glyph { width: 17px; height: 17px; flex: none; }
+.dial-label span {
+  font-size: 10px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-dim);
+}
+.dial-keys { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-width: 320px; }
+.key {
+  aspect-ratio: 1; display: grid; place-items: center;
+  font-family: var(--font-num); font-size: 17px;
+  color: var(--ink-dim);
+  background: var(--paper);
+  border: 1.5px solid var(--line-firm); border-radius: var(--r-sm);
+  box-shadow: var(--key-shadow);
+  transition: all .12s ease;
+}
+.key:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-faint); }
+.key:active:not(:disabled) { transform: translateY(2px); box-shadow: none; }
+.key:disabled { opacity: .75; }
+.key[aria-pressed="true"] {
+  font-weight: 700;
+  background: var(--dial-fill); border-color: var(--dial-fill); color: var(--dial-on);
+  box-shadow: none; opacity: 1;
+}
+.dial-row.blue   { --dial-fill: var(--blue-fill);   --dial-on: var(--blue-on); }
+.dial-row.yellow { --dial-fill: var(--yellow-fill); --dial-on: var(--yellow-on); }
+.dial-row.purple { --dial-fill: var(--purple-fill); --dial-on: var(--purple-on); }
+
+.proposal-readout {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 18px; margin-bottom: 6px;
+  background: var(--sunk);
+  border: 1.5px solid var(--line); border-radius: var(--r-md);
+}
+.readout-digit { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.readout-digit .num {
+  font-family: var(--font-num); font-size: 34px; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.readout-digit.blue   { color: var(--blue); }
+.readout-digit.yellow { color: var(--yellow); }
+.readout-digit.purple { color: var(--purple); }
+
+.console-actions { display: grid; gap: 10px; padding-top: 6px; }
+.console-actions .row { display: flex; gap: 8px; }
+.console-actions .row .btn { flex: 1; }
+
+.tests-left {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.pip { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--line-firm); }
+.pip.used { background: var(--brand-fill); border-color: var(--brand-fill); }
+
+/* ---------- logbook ---------- */
+
+.log-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.log-table th {
+  padding: 9px 6px; text-align: center;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-faint);
+  border-bottom: 1.5px solid var(--line);
+}
+.log-table th:first-child, .log-table td:first-child { text-align: left; padding-left: 16px; }
+.log-table td {
+  padding: 8px 6px; text-align: center;
+  font-family: var(--font-num); font-size: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.log-table tbody tr:hover { background: var(--sunk); }
+.log-table tr.current { background: var(--brand-wash); }
+.log-round { color: var(--ink-faint); font-size: 12px; }
+.log-code .b { color: var(--blue); font-weight: 700; }
+.log-code .y { color: var(--yellow); font-weight: 700; }
+.log-code .p { color: var(--purple); font-weight: 700; }
+.log-yes { color: var(--brand-deep); font-weight: 700; }
+.log-no  { color: var(--fail); font-weight: 700; }
+.log-empty { color: var(--ink-faint); }
+
+.empty-note { padding: 28px 18px; text-align: center; font-size: 14px; color: var(--ink-faint); }
+
+.assist-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 14px 20px; border-top: 1.5px solid var(--line);
+}
+.assist-bar .label {
+  font-size: 10px; font-weight: 700; letter-spacing: .13em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+
+.candidates { display: flex; flex-wrap: wrap; gap: 6px; padding: 16px 20px 0; }
+.candidate {
+  padding: 5px 10px;
+  font-family: var(--font-num); font-size: 13px;
+  background: var(--sunk);
+  border: 1.5px solid var(--line); border-radius: var(--r-sm);
+}
+
+/* ==========================================================================
+   OVERLAYS
+   ========================================================================== */
+
+.overlay {
+  position: fixed; inset: 0; z-index: 60;
+  display: grid; place-items: center; padding: 20px;
+  background: var(--scrim);
+  backdrop-filter: blur(3px);
+}
+.overlay.fresh { animation: fade .2s ease; }
+@keyframes fade { from { opacity: 0; } }
+
+.modal {
+  width: min(620px, 100%); max-height: 86vh; overflow-y: auto;
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+}
+.overlay.fresh .modal { animation: pop .28s cubic-bezier(.2,.9,.3,1); }
+@keyframes pop { from { opacity: 0; transform: translateY(14px) scale(.99); } }
+
+.modal .panel-body h3 {
+  font-size: 11px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--brand-deep); margin: 22px 0 8px;
+}
+.modal .panel-body h3:first-child { margin-top: 0; }
+.modal .panel-body p, .modal .panel-body li { font-size: 15px; color: var(--ink-dim); line-height: 1.6; }
+.modal .panel-body b { color: var(--ink); }
+.modal .panel-body ul { margin: 6px 0; padding-left: 20px; }
+.modal-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+  padding: 14px 20px; background: var(--sunk); border-top: 1.5px solid var(--line);
+}
+
+.verdict { text-align: center; padding: 34px 24px 24px; }
+.verdict .seal {
+  width: 78px; height: 78px; margin: 0 auto 18px;
+  display: grid; place-items: center;
+  font-size: 34px; border-radius: 50%;
+  color: var(--brand-on);
+}
+.verdict.win .seal { background: var(--brand-fill); }
+.verdict.lose .seal { background: var(--fail); color: #fff; }
+.verdict h2 { font-size: 28px; letter-spacing: -.02em; color: var(--ink); margin-bottom: 8px; }
+.verdict .sub { font-size: 15px; color: var(--ink-dim); }
+
+.reveal-code { display: flex; justify-content: center; gap: 16px; margin: 22px 0 6px; }
+.reveal-code .num { font-family: var(--font-num); font-size: 40px; font-weight: 700; line-height: 1; }
+
+.reveal-list { display: grid; gap: 8px; padding: 4px 20px 20px; }
+.reveal-row {
+  display: grid; grid-template-columns: 30px 1fr; gap: 12px; align-items: start;
+  padding: 11px 13px;
+  background: var(--sunk);
+  border: 1.5px solid var(--line); border-radius: var(--r-sm);
+}
+.reveal-row .letter {
+  width: 26px; height: 26px; display: grid; place-items: center;
+  font-size: 11.5px; font-weight: 700;
+  color: var(--brand-on); background: var(--brand-fill); border-radius: var(--r-sm);
+}
+.reveal-row .txt { font-size: 14.5px; color: var(--ink); }
+.reveal-row .card-ref {
+  display: block; font-size: 9.5px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-faint); margin-top: 3px;
+}
+
+.toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 90;
+  padding: 11px 20px;
+  font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--paper); background: var(--ink);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-lg);
+  animation: toast-in .3s cubic-bezier(.2,1.2,.4,1);
+}
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } }
+
+/* ==========================================================================
+   RESPONSIVE
+   ========================================================================== */
+
+@media (max-width: 900px) {
+  .lower { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .app { padding: 0 14px 80px; }
+  .hero { padding: 26px 20px; }
+  .dial-row { grid-template-columns: 1fr; gap: 6px; }
+  .readout-digit .num { font-size: 28px; }
+  .official-head, .official-row { grid-template-columns: 26px 1fr 1fr 40px; }
+  .official-drop { width: 40px; height: 40px; font-size: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
+/* ==========================================================================
+   CARD ICONS
+   The printed cards say it in shapes and signs; these do the same.
+   ========================================================================== */
+
+.glyphs {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: var(--gl-gap);
+  --gl-size: 22px;
+  --gl-gap: 7px;
+  --gl-text: 15px;
+}
+.glyphs.gl-sm { --gl-size: 15px; --gl-gap: 5px; --gl-text: 11.5px; }
+
+.gl-svg { width: var(--gl-size); height: var(--gl-size); display: block; }
+/* Bright fill so the shape still reads as its own colour, with a darker edge
+   of the same hue so it stays defined on white. Taking the ink token alone
+   made the yellow square a dark olive — legible, but no longer yellow, which
+   is the one thing this glyph exists to say. */
+.gl-shape svg {
+  fill: currentColor;
+  stroke: var(--gl-edge);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+/* The outline is measured in device pixels, not viewBox units. A stroke that
+   scales with the icon shrinks to a fraction of a pixel at the 15px size used
+   in the options list, and antialiasing then blends it away to roughly half
+   the contrast it computes to on paper. */
+.gl-shape svg * { vector-effect: non-scaling-stroke; }
+
+.gl-shape.gl-blue   { color: var(--blue-fill);   --gl-edge: color-mix(in srgb, var(--blue-fill)   58%, var(--gl-shade)); }
+.gl-shape.gl-yellow { color: var(--yellow-fill); --gl-edge: color-mix(in srgb, var(--yellow-fill) 58%, var(--gl-shade)); }
+.gl-shape.gl-purple { color: var(--purple-fill); --gl-edge: color-mix(in srgb, var(--purple-fill) 58%, var(--gl-shade)); }
+
+.gl-num {
+  display: grid; place-items: center;
+  min-width: var(--gl-size); height: var(--gl-size);
+  padding: 0 3px;
+  font-family: var(--font-num); font-size: var(--gl-text); font-weight: 700;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1.5px solid var(--line-firm); border-radius: 4px;
+}
+.gl-op {
+  font-family: var(--font-num); font-size: var(--gl-text); font-weight: 700;
+  color: var(--ink-dim);
+}
+.gl-sum {
+  font-size: calc(var(--gl-text) + 3px); font-weight: 700;
+  line-height: 1; color: var(--ink);
+}
+.gl-word {
+  padding: 2px 7px;
+  font-size: calc(var(--gl-text) - 3px); font-weight: 700; letter-spacing: .07em;
+  color: var(--ink-dim);
+  background: var(--sunk);
+  border: 1.5px solid var(--line); border-radius: var(--r-pill);
+  white-space: nowrap;
+}
+
+.gl-fig { color: var(--ink-dim); display: block; }
+.gl-fig svg { fill: currentColor; }
+.gl-fig.gl-none { color: var(--fail); }
+
+.gl-others { display: flex; gap: 2px; color: var(--ink-dim); }
+.gl-others svg { fill: currentColor; width: calc(var(--gl-size) * .62); height: calc(var(--gl-size) * .62); }
+
+.gl-any { display: flex; gap: 2px; }
+.gl-any .gl-svg { width: calc(var(--gl-size) * .72); height: calc(var(--gl-size) * .72); }
+.gl-any .gl-shape:nth-child(1) { color: var(--blue-fill);   --gl-edge: color-mix(in srgb, var(--blue-fill)   58%, var(--gl-shade)); }
+.gl-any .gl-shape:nth-child(2) { color: var(--yellow-fill); --gl-edge: color-mix(in srgb, var(--yellow-fill) 58%, var(--gl-shade)); }
+.gl-any .gl-shape:nth-child(3) { color: var(--purple-fill); --gl-edge: color-mix(in srgb, var(--purple-fill) 58%, var(--gl-shade)); }
+
+.gl-count { display: inline-flex; align-items: center; gap: 3px; }
+.gl-times {
+  font-family: var(--font-num); font-size: calc(var(--gl-text) - 1px); font-weight: 700;
+  color: var(--ink-dim);
+}
+
+/* where the icons sit */
+
+.verifier-art {
+  display: flex; justify-content: center;
+  padding: 14px 12px 2px;
+}
+.variant .gl-sm { margin-top: 5px; }
+.variant-body { display: grid; gap: 0; }
+.index-art { margin-top: 7px; }
+.reveal-row .glyphs { margin-top: 6px; }
+
+/* ---------- replay: how the field narrowed, answer by answer ---------- */
+
+.replay { border-top: 1.5px solid var(--line); }
+
+.replay-track {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  padding: 14px 20px 0;
+}
+.replay-step {
+  display: grid; gap: 1px; justify-items: center;
+  padding: 5px 9px;
+  background: var(--sunk);
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-sm);
+  transition: all .13s ease;
+}
+.replay-step:hover { border-color: var(--line-firm); }
+.replay-step.yes { border-left: 3px solid var(--pass); }
+.replay-step.no  { border-left: 3px solid var(--fail); }
+.replay-step.on {
+  background: var(--brand-wash); border-color: var(--brand);
+}
+.rs-label {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-faint);
+  white-space: nowrap;
+}
+.replay-step.on .rs-label { color: var(--brand-deep); }
+.rs-n {
+  font-family: var(--font-num); font-size: 14px; font-weight: 700;
+  color: var(--ink); font-variant-numeric: tabular-nums;
+}
+
+.replay-say {
+  margin: 0; padding: 12px 20px 0;
+  font-size: 13.5px; color: var(--ink-dim); line-height: 1.55;
+}
+.replay-say b { color: var(--ink); }
+
+/* Struck codes are past tense, not decoration — dim them with a real colour
+   rather than opacity, which took the digits below a readable contrast. */
+.candidate.out {
+  text-decoration: line-through;
+  border-style: dashed;
+  border-color: var(--fail);
+}
+.candidate.out .log-code .b,
+.candidate.out .log-code .y,
+.candidate.out .log-code .p { color: var(--ink-faint); }
+
+/* ---------- no-questions variant ---------- */
+
+.cold-rules { margin: 10px 0 14px; padding-left: 22px; }
+.cold-rules li { font-size: 14px; color: var(--ink-dim); line-height: 1.55; margin-bottom: 5px; }
+.cold-rules b { color: var(--ink); }
+
+.cold-facts {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1.5px;
+  margin-top: 16px;
+  background: var(--line); border: 1.5px solid var(--line);
+  border-radius: var(--r-sm); overflow: hidden;
+}
+.cold-facts > div { padding: 10px 13px; background: var(--sunk); }
+.cold-facts dt {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.cold-facts dd {
+  margin: 3px 0 0; font-family: var(--font-num); font-size: 18px;
+  color: var(--brand-deep); font-variant-numeric: tabular-nums;
+}
+
+.tried { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- worksheet: all 125 codes, crossed off by hand ---------- */
+
+.worksheet { margin-top: 0; }
+.worksheet-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  width: 100%; padding: 14px 20px;
+  background: var(--sunk);
+  border-bottom: 1.5px solid transparent;
+  text-align: left;
+  transition: background .15s ease;
+}
+.worksheet-head[aria-expanded="true"] { border-bottom-color: var(--line); }
+.worksheet-head:hover { background: var(--brand-wash); }
+.worksheet-meta {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 11px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.worksheet-meta b { font-family: var(--font-num); font-size: 15px; color: var(--brand-deep); }
+.worksheet-caret { color: var(--ink-dim); font-size: 12px; }
+
+.worksheet-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;
+}
+.ws-block { min-width: 0; }
+.ws-head {
+  display: flex; align-items: center; gap: 7px;
+  padding-bottom: 7px; margin-bottom: 7px;
+  border-bottom: 1.5px solid var(--line);
+}
+.ws-head .glyph { width: 14px; height: 14px; flex: none; color: var(--blue-fill); }
+.ws-head span {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.ws-cells { display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; }
+
+.ws-cell {
+  display: flex; align-items: center; justify-content: center; gap: 1px;
+  padding: 5px 2px;
+  font-family: var(--font-num); font-size: 11px; font-weight: 700;
+  background: var(--sunk);
+  border: 1.5px solid var(--line);
+  border-radius: 4px;
+  transition: background .1s ease, border-color .1s ease;
+}
+.ws-cell .b { color: var(--blue); }
+.ws-cell .y { color: var(--yellow); }
+.ws-cell .p { color: var(--purple); }
+.ws-cell:hover { border-color: var(--line-firm); background: var(--paper); }
+.ws-cell.off {
+  background: transparent; border-style: dashed; border-color: var(--line);
+  text-decoration: line-through;
+}
+.ws-cell.off .b, .ws-cell.off .y, .ws-cell.off .p { color: var(--ink-faint); }
+
+@media (max-width: 1100px) { .worksheet-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 720px)  { .worksheet-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 420px)  {
+  .worksheet-grid { grid-template-columns: 1fr; }
+  /* One column leaves the width to spare, and a thumb needs more than 29px. */
+  .ws-cell { min-height: 40px; font-size: 13px; }
+}
+
+</style>
+
+<script>window.CRITERIA = [{"id":1,"title":"blue compared to 1","description":"the blue number compared to 1","verifiers":[{"index":0,"text":"blue is equal to 1","expr":"b === 1"},{"index":1,"text":"blue is greater than 1","expr":"b > 1"}]},{"id":2,"title":"blue compared to 3","description":"the blue number compared to 3","verifiers":[{"index":0,"text":"blue is less than 3","expr":"b \u003c 3"},{"index":1,"text":"blue is equal to 3","expr":"b === 3"},{"index":2,"text":"blue is greater than 3","expr":"b > 3"}]},{"id":3,"title":"yellow compared to 3","description":"the yellow number compared to 3","verifiers":[{"index":0,"text":"yellow is less than 3","expr":"y \u003c 3"},{"index":1,"text":"yellow is equal to 3","expr":"y === 3"},{"index":2,"text":"yellow is greater than 3","expr":"y > 3"}]},{"id":4,"title":"yellow compared to 4","description":"the yellow number compared to 4","verifiers":[{"index":0,"text":"yellow is less than 4","expr":"y \u003c 4"},{"index":1,"text":"yellow is equal to 4","expr":"y === 4"},{"index":2,"text":"yellow is greater than 4","expr":"y > 4"}]},{"id":5,"title":"blue even or odd","description":"if blue is even or odd","verifiers":[{"index":0,"text":"blue is even","expr":"b % 2 === 0"},{"index":1,"text":"blue is odd","expr":"b % 2 !== 0"}]},{"id":6,"title":"yellow even or odd","description":"if yellow is even or odd","verifiers":[{"index":0,"text":"yellow is even","expr":"y % 2 === 0"},{"index":1,"text":"yellow is odd","expr":"y % 2 !== 0"}]},{"id":7,"title":"purple even or odd","description":"if purple is even or odd","verifiers":[{"index":0,"text":"purple is even","expr":"p % 2 === 0"},{"index":1,"text":"purple is odd","expr":"p % 2 !== 0"}]},{"id":8,"title":"number of 1s","description":"the number of 1s in the code","verifiers":[{"index":0,"text":"no 1s","expr":"[b,y,p].filter(n => n === 1).length === 0"},{"index":1,"text":"one 1","expr":"[b,y,p].filter(n => n === 1).length === 1"},{"index":2,"text":"two 1s","expr":"[b,y,p].filter(n => n === 1).length === 2"},{"index":3,"text":"three 1s","expr":"[b,y,p].filter(n => n === 1).length === 3"}]},{"id":9,"title":"number of 3s","description":"the number of 3s in the code","verifiers":[{"index":0,"text":"no 3s","expr":"[b,y,p].filter(n => n === 3).length === 0"},{"index":1,"text":"one 3","expr":"[b,y,p].filter(n => n === 3).length === 1"},{"index":2,"text":"two 3s","expr":"[b,y,p].filter(n => n === 3).length === 2"},{"index":3,"text":"three 3s","expr":"[b,y,p].filter(n => n === 3).length === 3"}]},{"id":10,"title":"number of 4s","description":"the number of 4s in the code","verifiers":[{"index":0,"text":"no 4s","expr":"[b,y,p].filter(n => n === 4).length === 0"},{"index":1,"text":"one 4","expr":"[b,y,p].filter(n => n === 4).length === 1"},{"index":2,"text":"two 4s","expr":"[b,y,p].filter(n => n === 4).length === 2"},{"index":3,"text":"three 4s","expr":"[b,y,p].filter(n => n === 4).length === 3"}]},{"id":11,"title":"blue compared to yellow","description":"the blue number compared to the yellow number","verifiers":[{"index":0,"text":"blue is less than yellow","expr":"b \u003c y"},{"index":1,"text":"blue is equal to yellow","expr":"b === y"},{"index":2,"text":"blue is greater than yellow","expr":"b > y"}]},{"id":12,"title":"blue compared to purple","description":"the blue number compared to the purple number","verifiers":[{"index":0,"text":"blue is less than purple","expr":"b \u003c p"},{"index":1,"text":"blue is equal to purple","expr":"b === p"},{"index":2,"text":"blue is greater than purple","expr":"b > p"}]},{"id":13,"title":"yellow compared to purple","description":"the yellow number compared to the purple number","verifiers":[{"index":0,"text":"yellow is less than purple","expr":"y \u003c p"},{"index":1,"text":"yellow is equal to purple","expr":"y === p"},{"index":2,"text":"yellow is greater than purple","expr":"y > p"}]},{"id":14,"title":"which colour is smallest (strictly)","description":"which colour's number is smaller than the others'","verifiers":[{"index":0,"text":"blue is smaller than purple and yellow","expr":"b \u003c p && b \u003c y"},{"index":1,"text":"yellow is smaller than blue and purple","expr":"y \u003c b && y \u003c p"},{"index":2,"text":"purple is smaller than yellow and blue","expr":"p \u003c y && p \u003c b"}]},{"id":15,"title":"which colour is largest (strictly)","description":"which colour's number is larger than the others'","verifiers":[{"index":0,"text":"blue is larger than purple and yellow","expr":"b > p && b > y"},{"index":1,"text":"yellow is larger than blue and purple","expr":"y > b && y > p"},{"index":2,"text":"purple is larger than yellow and blue","expr":"p > y && p > b"}]},{"id":16,"title":"count of even vs odd numbers","description":"the number of even numbers compared to the number of odd numbers","verifiers":[{"index":0,"text":"there are more even numbers (e.g. 245)","expr":"[b,y,p].filter(n => n % 2 === 0).length >= 2"},{"index":1,"text":"there are more odd numbers (e.g. 332)","expr":"[b,y,p].filter(n => n % 2 === 0).length \u003c 2"}]},{"id":17,"title":"how many even numbers","description":"how many even numbers there are in the code","verifiers":[{"index":0,"text":"zero even numbers","expr":"[b,y,p].filter(n => n % 2 === 0).length === 0"},{"index":1,"text":"one even number","expr":"[b,y,p].filter(n => n % 2 === 0).length === 1"},{"index":2,"text":"two even numbers","expr":"[b,y,p].filter(n => n % 2 === 0).length === 2"},{"index":3,"text":"three even numbers","expr":"[b,y,p].filter(n => n % 2 === 0).length === 3"}]},{"id":18,"title":"sum even or odd","description":"if the sum of all the numbers is even or odd","verifiers":[{"index":0,"text":"the sum of the numbers is even","expr":"(b + y + p) % 2 === 0"},{"index":1,"text":"the sum of the numbers is odd","expr":"(b + y + p) % 2 !== 0"}]},{"id":19,"title":"blue + yellow compared to 6","description":"the sum of blue and yellow compared to 6","verifiers":[{"index":0,"text":"the sum of blue and yellow is less than 6","expr":"b + y \u003c 6"},{"index":1,"text":"the sum of blue and yellow is equal to 6","expr":"b + y === 6"},{"index":2,"text":"the sum of blue and yellow is greater than 6","expr":"b + y > 6"}]},{"id":20,"title":"repetition in the code","description":"if a number repeats itself in the code","verifiers":[{"index":0,"text":"a triple number","expr":"b === y && y === p"},{"index":1,"text":"a double number","expr":"(b === y || b === p || y === p) && !(b === y && y === p)"},{"index":2,"text":"no repetition","expr":"b !== y && b !== p && y !== p"}]},{"id":21,"title":"is there exactly a pair","description":"if there is a number present exactly twice","verifiers":[{"index":0,"text":"no pairs","expr":"!((b === y || b === p || y === p) && !(b === y && y === p))"},{"index":1,"text":"a pair","expr":"(b === y || b === p || y === p) && !(b === y && y === p)"}]},{"id":22,"title":"ascending / descending / no order","description":"if the 3 numbers in the code are in ascending order, descending order, or no order","verifiers":[{"index":0,"text":"ascending order","expr":"b \u003c y && y \u003c p"},{"index":1,"text":"descending order","expr":"b > y && y > p"},{"index":2,"text":"no order","expr":"!(b \u003c y && y \u003c p) && !(b > y && y > p)"}]},{"id":23,"title":"sum compared to 6","description":"the sum of all numbers compared to 6","verifiers":[{"index":0,"text":"the sum of the numbers is less than 6","expr":"b + y + p \u003c 6"},{"index":1,"text":"the sum of the numbers is equal to 6","expr":"b + y + p === 6"},{"index":2,"text":"the sum of the numbers is greater than 6","expr":"b + y + p > 6"}]},{"id":24,"title":"sequence of ascending numbers","description":"if there is a sequence of ascending numbers","verifiers":[{"index":0,"text":"3 numbers in ascending order","expr":"y === b + 1 && p === y + 1"},{"index":1,"text":"2 numbers in ascending order","expr":"(y === b + 1) !== (p === y + 1)"},{"index":2,"text":"no numbers in ascending order","expr":"y !== b + 1 && p !== y + 1"}]},{"id":25,"title":"sequence of ascending or descending numbers","description":"if there is a sequence of ascending or descending numbers","verifiers":[{"index":0,"text":"no sequence of numbers in ascending or descending order","expr":"y !== b + 1 && p !== y + 1 && y !== b - 1 && p !== y - 1"},{"index":1,"text":"2 numbers in ascending or descending order","expr":"((y === b + 1) !== (p === y + 1)) || ((y === b - 1) !== (p === y - 1))"},{"index":2,"text":"3 numbers in ascending or descending order","expr":"(y === b + 1 && p === y + 1) || (y === b - 1 && p === y - 1)"}]},{"id":26,"title":"a specific colour is less than 3","description":"that a specific colour is less than three","verifiers":[{"index":0,"text":"blue is less than 3","expr":"b \u003c 3"},{"index":1,"text":"yellow is less than 3","expr":"y \u003c 3"},{"index":2,"text":"purple is less than 3","expr":"p \u003c 3"}]},{"id":27,"title":"a specific colour is less than 4","description":"that a specific colour is less than 4","verifiers":[{"index":0,"text":"blue is less than 4","expr":"b \u003c 4"},{"index":1,"text":"yellow is less than 4","expr":"y \u003c 4"},{"index":2,"text":"purple is less than 4","expr":"p \u003c 4"}]},{"id":28,"title":"a specific colour is equal to 1","description":"that a specific colour is equal to 1","verifiers":[{"index":0,"text":"blue is equal to 1","expr":"b === 1"},{"index":1,"text":"yellow is equal to 1","expr":"y === 1"},{"index":2,"text":"purple is equal to 1","expr":"p === 1"}]},{"id":29,"title":"a specific colour is equal to 3","description":"that a specific colour is equal to 3","verifiers":[{"index":0,"text":"blue is equal to 3","expr":"b === 3"},{"index":1,"text":"yellow is equal to 3","expr":"y === 3"},{"index":2,"text":"purple is equal to 3","expr":"p === 3"}]},{"id":30,"title":"a specific colour is equal to 4","description":"that a specific colour is equal to 4","verifiers":[{"index":0,"text":"blue is equal to 4","expr":"b === 4"},{"index":1,"text":"yellow is equal to 4","expr":"y === 4"},{"index":2,"text":"purple is equal to 4","expr":"p === 4"}]},{"id":31,"title":"a specific colour is greater than 1","description":"that a specific colour is greater than 1","verifiers":[{"index":0,"text":"blue is greater than 1","expr":"b > 1"},{"index":1,"text":"yellow is greater than 1","expr":"y > 1"},{"index":2,"text":"purple is greater than 1","expr":"p > 1"}]},{"id":32,"title":"a specific colour is greater than 3","description":"that a specific colour is greater than 3","verifiers":[{"index":0,"text":"blue is greater than 3","expr":"b > 3"},{"index":1,"text":"yellow is greater than 3","expr":"y > 3"},{"index":2,"text":"purple is greater than 3","expr":"p > 3"}]},{"id":33,"title":"a specific colour is even or odd","description":"that a specific colour is even or odd","verifiers":[{"index":0,"text":"blue is even","expr":"b % 2 === 0"},{"index":1,"text":"blue is odd","expr":"b % 2 !== 0"},{"index":2,"text":"yellow is even","expr":"y % 2 === 0"},{"index":3,"text":"yellow is odd","expr":"y % 2 !== 0"},{"index":4,"text":"purple is even","expr":"p % 2 === 0"},{"index":5,"text":"purple is odd","expr":"p % 2 !== 0"}]},{"id":34,"title":"which colour is smallest (ties allowed)","description":"which colour has the smallest number (or is tied for the smallest number)","verifiers":[{"index":0,"text":"blue is the smallest or is equal to purple and yellow","expr":"b \u003c= p && b \u003c= y"},{"index":1,"text":"yellow is the smallest or is equal to blue and purple","expr":"y \u003c= b && y \u003c= p"},{"index":2,"text":"purple is the smallest or is equal to yellow and blue","expr":"p \u003c= y && p \u003c= b"}]},{"id":35,"title":"which colour is largest (ties allowed)","description":"which colour has the largest number (or is tied for the largest number)","verifiers":[{"index":0,"text":"blue is the largest or is equal to purple and yellow","expr":"b >= p && b >= y"},{"index":1,"text":"yellow is the largest or is equal to blue and purple","expr":"y >= b && y >= p"},{"index":2,"text":"purple is the largest or is equal to yellow and blue","expr":"p >= y && p >= b"}]},{"id":36,"title":"sum is a multiple of 3, 4 or 5","description":"the sum of all the numbers is a multiple of 3 or 4 or 5","verifiers":[{"index":0,"text":"is a multiple of 3","expr":"(b + y + p) % 3 === 0"},{"index":1,"text":"is a multiple of 4","expr":"(b + y + p) % 4 === 0"},{"index":2,"text":"is a multiple of 5","expr":"(b + y + p) % 5 === 0"}]},{"id":37,"title":"sum of 2 specific colours equals 4","description":"the sum of 2 specific colours is equal to 4","verifiers":[{"index":0,"text":"the sum of blue and yellow is equal to 4","expr":"b + y === 4"},{"index":1,"text":"the sum of blue and purple is equal to 4","expr":"b + p === 4"},{"index":2,"text":"the sum of yellow and purple is equal to 4","expr":"y + p === 4"}]},{"id":38,"title":"sum of 2 specific colours equals 6","description":"the sum of 2 specific colours is equal to 6","verifiers":[{"index":0,"text":"the sum of blue and yellow is equal to 6","expr":"b + y === 6"},{"index":1,"text":"the sum of blue and purple is equal to 6","expr":"b + p === 6"},{"index":2,"text":"the sum of yellow and purple is equal to 6","expr":"y + p === 6"}]},{"id":39,"title":"one specific colour compared to 1","description":"the number of one specific colour compared to 1","verifiers":[{"index":0,"text":"blue is equal to 1","expr":"b === 1"},{"index":1,"text":"blue is greater than 1","expr":"b > 1"},{"index":2,"text":"yellow is equal to 1","expr":"y === 1"},{"index":3,"text":"yellow is greater than 1","expr":"y > 1"},{"index":4,"text":"purple is equal to 1","expr":"p === 1"},{"index":5,"text":"purple is greater than 1","expr":"p > 1"}]},{"id":40,"title":"one specific colour compared to 3","description":"the number of one specific colour compared to 3","verifiers":[{"index":0,"text":"blue is less than 3","expr":"b \u003c 3"},{"index":1,"text":"blue is equal to 3","expr":"b === 3"},{"index":2,"text":"blue is greater than 3","expr":"b > 3"},{"index":3,"text":"yellow is less than 3","expr":"y \u003c 3"},{"index":4,"text":"yellow is equal to 3","expr":"y === 3"},{"index":5,"text":"yellow is greater than 3","expr":"y > 3"},{"index":6,"text":"purple is less than 3","expr":"p \u003c 3"},{"index":7,"text":"purple is equal to 3","expr":"p === 3"},{"index":8,"text":"purple is greater than 3","expr":"p > 3"}]},{"id":41,"title":"one specific colour compared to 4","description":"the number of one specific colour compared to 4","verifiers":[{"index":0,"text":"blue is less than 4","expr":"b \u003c 4"},{"index":1,"text":"blue is equal to 4","expr":"b === 4"},{"index":2,"text":"blue is greater than 4","expr":"b > 4"},{"index":3,"text":"yellow is less than 4","expr":"y \u003c 4"},{"index":4,"text":"yellow is equal to 4","expr":"y === 4"},{"index":5,"text":"yellow is greater than 4","expr":"y > 4"},{"index":6,"text":"purple is less than 4","expr":"p \u003c 4"},{"index":7,"text":"purple is equal to 4","expr":"p === 4"},{"index":8,"text":"purple is greater than 4","expr":"p > 4"}]},{"id":42,"title":"which colour is the smallest or the largest","description":"which colour is the smallest or the largest","verifiers":[{"index":0,"text":"blue is the smallest","expr":"b \u003c p && b \u003c y"},{"index":1,"text":"blue is the largest","expr":"b > p && b > y"},{"index":2,"text":"yellow is the smallest","expr":"y \u003c b && y \u003c p"},{"index":3,"text":"yellow is the largest","expr":"y > b && y > p"},{"index":4,"text":"purple is the smallest","expr":"p \u003c y && p \u003c b"},{"index":5,"text":"purple is the largest","expr":"p > y && p > b"}]},{"id":43,"title":"blue compared to another specific colour","description":"the blue number compared to the number of another specific colour","verifiers":[{"index":0,"text":"blue is less than yellow","expr":"b \u003c y"},{"index":1,"text":"blue is less than purple","expr":"b \u003c p"},{"index":2,"text":"blue is equal to yellow","expr":"b === y"},{"index":3,"text":"blue is equal to purple","expr":"b === p"},{"index":4,"text":"blue is greater than yellow","expr":"b > y"},{"index":5,"text":"blue is greater than purple","expr":"b > p"}]},{"id":44,"title":"yellow compared to another specific colour","description":"the yellow number compared to the number of another specific colour","verifiers":[{"index":0,"text":"yellow is less than blue","expr":"y \u003c b"},{"index":1,"text":"yellow is less than purple","expr":"y \u003c p"},{"index":2,"text":"yellow is equal to blue","expr":"y === b"},{"index":3,"text":"yellow is equal to purple","expr":"y === p"},{"index":4,"text":"yellow is greater than blue","expr":"y > b"},{"index":5,"text":"yellow is greater than purple","expr":"y > p"}]},{"id":45,"title":"how many 1s or how many 3s","description":"how many 1s OR how many 3s there are in the code","verifiers":[{"index":0,"text":"no 1s","expr":"[b,y,p].filter(n => n === 1).length === 0"},{"index":1,"text":"no 3s","expr":"[b,y,p].filter(n => n === 3).length === 0"},{"index":2,"text":"one 1","expr":"[b,y,p].filter(n => n === 1).length === 1"},{"index":3,"text":"one 3","expr":"[b,y,p].filter(n => n === 3).length === 1"},{"index":4,"text":"two 1s","expr":"[b,y,p].filter(n => n === 1).length === 2"},{"index":5,"text":"two 3s","expr":"[b,y,p].filter(n => n === 3).length === 2"}]},{"id":46,"title":"how many 3s or how many 4s","description":"how many 3s OR how many 4s there are in the code","verifiers":[{"index":0,"text":"no 3s","expr":"[b,y,p].filter(n => n === 3).length === 0"},{"index":1,"text":"no 4s","expr":"[b,y,p].filter(n => n === 4).length === 0"},{"index":2,"text":"one 3","expr":"[b,y,p].filter(n => n === 3).length === 1"},{"index":3,"text":"one 4","expr":"[b,y,p].filter(n => n === 4).length === 1"},{"index":4,"text":"two 3s","expr":"[b,y,p].filter(n => n === 3).length === 2"},{"index":5,"text":"two 4s","expr":"[b,y,p].filter(n => n === 4).length === 2"}]},{"id":47,"title":"how many 1s or how many 4s","description":"how many 1s OR how many 4s there are in the code","verifiers":[{"index":0,"text":"no 1s","expr":"[b,y,p].filter(n => n === 1).length === 0"},{"index":1,"text":"no 4s","expr":"[b,y,p].filter(n => n === 4).length === 0"},{"index":2,"text":"one 1","expr":"[b,y,p].filter(n => n === 1).length === 1"},{"index":3,"text":"one 4","expr":"[b,y,p].filter(n => n === 4).length === 1"},{"index":4,"text":"two 1s","expr":"[b,y,p].filter(n => n === 1).length === 2"},{"index":5,"text":"two 4s","expr":"[b,y,p].filter(n => n === 4).length === 2"}]},{"id":48,"title":"one specific colour compared to another specific colour","description":"one specific colour compared to another specific colour","verifiers":[{"index":0,"text":"blue is less than yellow","expr":"b \u003c y"},{"index":1,"text":"blue is equal to yellow","expr":"b === y"},{"index":2,"text":"blue is greater than yellow","expr":"b > y"},{"index":3,"text":"blue is less than purple","expr":"b \u003c p"},{"index":4,"text":"blue is equal to purple","expr":"b === p"},{"index":5,"text":"blue is greater than purple","expr":"b > p"},{"index":6,"text":"yellow is less than purple","expr":"y \u003c p"},{"index":7,"text":"yellow is equal to purple","expr":"y === p"},{"index":8,"text":"yellow is greater than purple","expr":"y > p"}]}];
+window.VERIFICATION = {"numbers":{"201":{"card":1,"symbol":"lozenge"},"202":{"card":95,"symbol":"currency"},"204":{"card":1,"symbol":"slash"},"205":{"card":95,"symbol":"pound"},"206":{"card":2,"symbol":"lozenge"},"207":{"card":94,"symbol":"currency"},"212":{"card":2,"symbol":"slash"},"213":{"card":94,"symbol":"pound"},"215":{"card":3,"symbol":"lozenge"},"216":{"card":93,"symbol":"currency"},"217":{"card":3,"symbol":"slash"},"219":{"card":93,"symbol":"pound"},"220":{"card":4,"symbol":"lozenge"},"221":{"card":92,"symbol":"currency"},"223":{"card":4,"symbol":"slash"},"224":{"card":92,"symbol":"pound"},"227":{"card":5,"symbol":"lozenge"},"228":{"card":91,"symbol":"currency"},"231":{"card":5,"symbol":"slash"},"232":{"card":91,"symbol":"pound"},"233":{"card":6,"symbol":"lozenge"},"236":{"card":90,"symbol":"currency"},"237":{"card":6,"symbol":"slash"},"243":{"card":90,"symbol":"pound"},"244":{"card":7,"symbol":"lozenge"},"247":{"card":89,"symbol":"currency"},"251":{"card":7,"symbol":"slash"},"252":{"card":89,"symbol":"pound"},"253":{"card":8,"symbol":"lozenge"},"255":{"card":88,"symbol":"currency"},"256":{"card":8,"symbol":"slash"},"257":{"card":88,"symbol":"pound"},"261":{"card":9,"symbol":"lozenge"},"263":{"card":87,"symbol":"currency"},"264":{"card":9,"symbol":"slash"},"266":{"card":87,"symbol":"pound"},"267":{"card":10,"symbol":"lozenge"},"268":{"card":86,"symbol":"currency"},"270":{"card":10,"symbol":"slash"},"273":{"card":86,"symbol":"pound"},"274":{"card":11,"symbol":"lozenge"},"277":{"card":85,"symbol":"currency"},"278":{"card":11,"symbol":"slash"},"279":{"card":85,"symbol":"pound"},"280":{"card":12,"symbol":"lozenge"},"282":{"card":12,"symbol":"slash"},"286":{"card":13,"symbol":"lozenge"},"287":{"card":84,"symbol":"currency"},"288":{"card":13,"symbol":"slash"},"289":{"card":84,"symbol":"pound"},"293":{"card":14,"symbol":"lozenge"},"294":{"card":83,"symbol":"currency"},"296":{"card":14,"symbol":"slash"},"299":{"card":83,"symbol":"pound"},"302":{"card":15,"symbol":"lozenge"},"303":{"card":82,"symbol":"currency"},"304":{"card":15,"symbol":"slash"},"308":{"card":82,"symbol":"pound"},"309":{"card":16,"symbol":"lozenge"},"311":{"card":81,"symbol":"currency"},"312":{"card":16,"symbol":"slash"},"314":{"card":81,"symbol":"pound"},"315":{"card":17,"symbol":"lozenge"},"316":{"card":80,"symbol":"currency"},"317":{"card":17,"symbol":"slash"},"319":{"card":80,"symbol":"pound"},"322":{"card":18,"symbol":"lozenge"},"324":{"card":79,"symbol":"currency"},"325":{"card":18,"symbol":"slash"},"327":{"card":79,"symbol":"pound"},"329":{"card":19,"symbol":"lozenge"},"330":{"card":78,"symbol":"currency"},"331":{"card":19,"symbol":"slash"},"332":{"card":78,"symbol":"pound"},"334":{"card":20,"symbol":"lozenge"},"335":{"card":77,"symbol":"currency"},"337":{"card":20,"symbol":"slash"},"338":{"card":77,"symbol":"pound"},"339":{"card":21,"symbol":"lozenge"},"340":{"card":76,"symbol":"currency"},"341":{"card":21,"symbol":"slash"},"344":{"card":76,"symbol":"pound"},"346":{"card":22,"symbol":"lozenge"},"347":{"card":75,"symbol":"currency"},"348":{"card":22,"symbol":"slash"},"349":{"card":75,"symbol":"pound"},"350":{"card":23,"symbol":"lozenge"},"352":{"card":74,"symbol":"currency"},"353":{"card":23,"symbol":"slash"},"355":{"card":74,"symbol":"pound"},"356":{"card":24,"symbol":"lozenge"},"357":{"card":73,"symbol":"currency"},"358":{"card":24,"symbol":"slash"},"359":{"card":73,"symbol":"pound"},"360":{"card":25,"symbol":"lozenge"},"362":{"card":72,"symbol":"currency"},"365":{"card":25,"symbol":"slash"},"369":{"card":72,"symbol":"pound"},"370":{"card":26,"symbol":"lozenge"},"372":{"card":71,"symbol":"currency"},"373":{"card":26,"symbol":"slash"},"374":{"card":71,"symbol":"pound"},"376":{"card":27,"symbol":"lozenge"},"377":{"card":70,"symbol":"currency"},"378":{"card":27,"symbol":"slash"},"379":{"card":70,"symbol":"pound"},"381":{"card":28,"symbol":"lozenge"},"382":{"card":69,"symbol":"currency"},"385":{"card":28,"symbol":"slash"},"386":{"card":69,"symbol":"pound"},"387":{"card":29,"symbol":"lozenge"},"389":{"card":68,"symbol":"currency"},"390":{"card":29,"symbol":"slash"},"391":{"card":68,"symbol":"pound"},"392":{"card":30,"symbol":"lozenge"},"393":{"card":67,"symbol":"currency"},"394":{"card":30,"symbol":"slash"},"395":{"card":67,"symbol":"pound"},"396":{"card":31,"symbol":"lozenge"},"399":{"card":66,"symbol":"currency"},"401":{"card":31,"symbol":"slash"},"402":{"card":66,"symbol":"pound"},"403":{"card":32,"symbol":"lozenge"},"404":{"card":65,"symbol":"currency"},"405":{"card":32,"symbol":"slash"},"406":{"card":65,"symbol":"pound"},"407":{"card":33,"symbol":"lozenge"},"409":{"card":64,"symbol":"currency"},"410":{"card":33,"symbol":"slash"},"412":{"card":64,"symbol":"pound"},"413":{"card":34,"symbol":"lozenge"},"414":{"card":63,"symbol":"currency"},"416":{"card":34,"symbol":"slash"},"418":{"card":63,"symbol":"pound"},"419":{"card":35,"symbol":"lozenge"},"421":{"card":62,"symbol":"currency"},"423":{"card":35,"symbol":"slash"},"424":{"card":62,"symbol":"pound"},"429":{"card":36,"symbol":"lozenge"},"430":{"card":61,"symbol":"currency"},"432":{"card":36,"symbol":"slash"},"433":{"card":61,"symbol":"pound"},"434":{"card":37,"symbol":"lozenge"},"435":{"card":60,"symbol":"currency"},"437":{"card":37,"symbol":"slash"},"439":{"card":60,"symbol":"pound"},"440":{"card":38,"symbol":"lozenge"},"441":{"card":59,"symbol":"currency"},"442":{"card":38,"symbol":"slash"},"445":{"card":59,"symbol":"pound"},"447":{"card":39,"symbol":"lozenge"},"449":{"card":58,"symbol":"currency"},"453":{"card":39,"symbol":"slash"},"454":{"card":58,"symbol":"pound"},"455":{"card":40,"symbol":"lozenge"},"458":{"card":57,"symbol":"currency"},"459":{"card":40,"symbol":"slash"},"461":{"card":57,"symbol":"pound"},"462":{"card":41,"symbol":"lozenge"},"463":{"card":56,"symbol":"currency"},"464":{"card":41,"symbol":"slash"},"469":{"card":56,"symbol":"pound"},"470":{"card":42,"symbol":"lozenge"},"471":{"card":55,"symbol":"currency"},"472":{"card":42,"symbol":"slash"},"474":{"card":55,"symbol":"pound"},"475":{"card":43,"symbol":"lozenge"},"476":{"card":54,"symbol":"currency"},"479":{"card":43,"symbol":"slash"},"480":{"card":54,"symbol":"pound"},"481":{"card":44,"symbol":"lozenge"},"482":{"card":53,"symbol":"currency"},"483":{"card":44,"symbol":"slash"},"484":{"card":53,"symbol":"pound"},"485":{"card":45,"symbol":"lozenge"},"486":{"card":52,"symbol":"currency"},"487":{"card":45,"symbol":"slash"},"490":{"card":52,"symbol":"pound"},"491":{"card":46,"symbol":"lozenge"},"492":{"card":51,"symbol":"currency"},"495":{"card":46,"symbol":"slash"},"496":{"card":51,"symbol":"pound"},"497":{"card":47,"symbol":"lozenge"},"498":{"card":50,"symbol":"currency"},"499":{"card":47,"symbol":"slash"},"502":{"card":50,"symbol":"pound"},"503":{"card":48,"symbol":"lozenge"},"504":{"card":49,"symbol":"currency"},"505":{"card":48,"symbol":"slash"},"506":{"card":49,"symbol":"pound"},"507":{"card":49,"symbol":"lozenge"},"509":{"card":48,"symbol":"currency"},"514":{"card":49,"symbol":"slash"},"515":{"card":48,"symbol":"pound"},"516":{"card":50,"symbol":"lozenge"},"518":{"card":47,"symbol":"currency"},"520":{"card":50,"symbol":"slash"},"523":{"card":47,"symbol":"pound"},"525":{"card":51,"symbol":"lozenge"},"527":{"card":46,"symbol":"currency"},"528":{"card":51,"symbol":"slash"},"530":{"card":46,"symbol":"pound"},"532":{"card":52,"symbol":"lozenge"},"533":{"card":45,"symbol":"currency"},"534":{"card":52,"symbol":"slash"},"536":{"card":45,"symbol":"pound"},"537":{"card":53,"symbol":"lozenge"},"540":{"card":44,"symbol":"currency"},"541":{"card":53,"symbol":"slash"},"543":{"card":44,"symbol":"pound"},"546":{"card":54,"symbol":"lozenge"},"547":{"card":43,"symbol":"currency"},"549":{"card":54,"symbol":"slash"},"550":{"card":43,"symbol":"pound"},"551":{"card":55,"symbol":"lozenge"},"553":{"card":42,"symbol":"currency"},"557":{"card":55,"symbol":"slash"},"558":{"card":42,"symbol":"pound"},"560":{"card":56,"symbol":"lozenge"},"562":{"card":41,"symbol":"currency"},"563":{"card":56,"symbol":"slash"},"564":{"card":41,"symbol":"pound"},"566":{"card":57,"symbol":"lozenge"},"567":{"card":40,"symbol":"currency"},"568":{"card":57,"symbol":"slash"},"571":{"card":40,"symbol":"pound"},"572":{"card":58,"symbol":"lozenge"},"573":{"card":39,"symbol":"currency"},"576":{"card":58,"symbol":"slash"},"577":{"card":39,"symbol":"pound"},"578":{"card":59,"symbol":"lozenge"},"579":{"card":38,"symbol":"currency"},"580":{"card":59,"symbol":"slash"},"581":{"card":38,"symbol":"pound"},"582":{"card":60,"symbol":"lozenge"},"585":{"card":37,"symbol":"currency"},"586":{"card":60,"symbol":"slash"},"587":{"card":37,"symbol":"pound"},"588":{"card":61,"symbol":"lozenge"},"589":{"card":36,"symbol":"currency"},"590":{"card":61,"symbol":"slash"},"591":{"card":36,"symbol":"pound"},"592":{"card":62,"symbol":"lozenge"},"593":{"card":35,"symbol":"currency"},"594":{"card":62,"symbol":"slash"},"595":{"card":35,"symbol":"pound"},"596":{"card":63,"symbol":"lozenge"},"597":{"card":34,"symbol":"currency"},"598":{"card":63,"symbol":"slash"},"599":{"card":34,"symbol":"pound"},"604":{"card":64,"symbol":"lozenge"},"605":{"card":33,"symbol":"currency"},"606":{"card":64,"symbol":"slash"},"608":{"card":33,"symbol":"pound"},"609":{"card":65,"symbol":"lozenge"},"610":{"card":32,"symbol":"currency"},"611":{"card":65,"symbol":"slash"},"613":{"card":32,"symbol":"pound"},"614":{"card":66,"symbol":"lozenge"},"615":{"card":31,"symbol":"currency"},"616":{"card":66,"symbol":"slash"},"617":{"card":31,"symbol":"pound"},"618":{"card":67,"symbol":"lozenge"},"621":{"card":30,"symbol":"currency"},"625":{"card":67,"symbol":"slash"},"627":{"card":30,"symbol":"pound"},"628":{"card":68,"symbol":"lozenge"},"629":{"card":29,"symbol":"currency"},"630":{"card":68,"symbol":"slash"},"631":{"card":29,"symbol":"pound"},"632":{"card":69,"symbol":"lozenge"},"633":{"card":28,"symbol":"currency"},"634":{"card":69,"symbol":"slash"},"635":{"card":28,"symbol":"pound"},"636":{"card":70,"symbol":"lozenge"},"637":{"card":27,"symbol":"currency"},"638":{"card":70,"symbol":"slash"},"639":{"card":27,"symbol":"pound"},"640":{"card":71,"symbol":"lozenge"},"641":{"card":26,"symbol":"currency"},"643":{"card":71,"symbol":"slash"},"645":{"card":26,"symbol":"pound"},"646":{"card":72,"symbol":"lozenge"},"647":{"card":25,"symbol":"currency"},"648":{"card":72,"symbol":"slash"},"649":{"card":25,"symbol":"pound"},"650":{"card":73,"symbol":"lozenge"},"651":{"card":24,"symbol":"currency"},"652":{"card":73,"symbol":"slash"},"653":{"card":24,"symbol":"pound"},"654":{"card":74,"symbol":"lozenge"},"656":{"card":23,"symbol":"currency"},"657":{"card":74,"symbol":"slash"},"658":{"card":23,"symbol":"pound"},"661":{"card":75,"symbol":"lozenge"},"662":{"card":22,"symbol":"currency"},"663":{"card":75,"symbol":"slash"},"664":{"card":22,"symbol":"pound"},"665":{"card":76,"symbol":"lozenge"},"667":{"card":21,"symbol":"currency"},"668":{"card":76,"symbol":"slash"},"669":{"card":21,"symbol":"pound"},"670":{"card":77,"symbol":"lozenge"},"673":{"card":20,"symbol":"currency"},"677":{"card":77,"symbol":"slash"},"680":{"card":20,"symbol":"pound"},"681":{"card":78,"symbol":"lozenge"},"684":{"card":19,"symbol":"currency"},"686":{"card":78,"symbol":"slash"},"687":{"card":19,"symbol":"pound"},"688":{"card":79,"symbol":"lozenge"},"690":{"card":18,"symbol":"currency"},"691":{"card":79,"symbol":"slash"},"694":{"card":18,"symbol":"pound"},"695":{"card":80,"symbol":"lozenge"},"696":{"card":17,"symbol":"currency"},"697":{"card":80,"symbol":"slash"},"699":{"card":17,"symbol":"pound"},"701":{"card":81,"symbol":"lozenge"},"704":{"card":16,"symbol":"currency"},"706":{"card":81,"symbol":"slash"},"708":{"card":16,"symbol":"pound"},"709":{"card":82,"symbol":"lozenge"},"710":{"card":15,"symbol":"currency"},"714":{"card":82,"symbol":"slash"},"715":{"card":15,"symbol":"pound"},"717":{"card":83,"symbol":"lozenge"},"718":{"card":14,"symbol":"currency"},"719":{"card":83,"symbol":"slash"},"720":{"card":14,"symbol":"pound"},"723":{"card":84,"symbol":"lozenge"},"725":{"card":13,"symbol":"currency"},"726":{"card":84,"symbol":"slash"},"729":{"card":13,"symbol":"pound"},"733":{"card":12,"symbol":"currency"},"736":{"card":12,"symbol":"pound"},"737":{"card":85,"symbol":"lozenge"},"738":{"card":11,"symbol":"currency"},"739":{"card":85,"symbol":"slash"},"740":{"card":11,"symbol":"pound"},"741":{"card":86,"symbol":"lozenge"},"742":{"card":10,"symbol":"currency"},"743":{"card":86,"symbol":"slash"},"744":{"card":10,"symbol":"pound"},"746":{"card":87,"symbol":"lozenge"},"747":{"card":9,"symbol":"currency"},"749":{"card":87,"symbol":"slash"},"750":{"card":9,"symbol":"pound"},"751":{"card":88,"symbol":"lozenge"},"754":{"card":8,"symbol":"currency"},"755":{"card":88,"symbol":"slash"},"757":{"card":8,"symbol":"pound"},"758":{"card":89,"symbol":"lozenge"},"759":{"card":7,"symbol":"currency"},"763":{"card":89,"symbol":"slash"},"765":{"card":7,"symbol":"pound"},"766":{"card":90,"symbol":"lozenge"},"767":{"card":6,"symbol":"currency"},"769":{"card":90,"symbol":"slash"},"770":{"card":6,"symbol":"pound"},"771":{"card":91,"symbol":"lozenge"},"773":{"card":5,"symbol":"currency"},"775":{"card":91,"symbol":"slash"},"776":{"card":5,"symbol":"pound"},"778":{"card":92,"symbol":"lozenge"},"779":{"card":4,"symbol":"currency"},"780":{"card":92,"symbol":"slash"},"781":{"card":4,"symbol":"pound"},"782":{"card":93,"symbol":"lozenge"},"783":{"card":3,"symbol":"currency"},"785":{"card":93,"symbol":"slash"},"786":{"card":3,"symbol":"pound"},"787":{"card":94,"symbol":"lozenge"},"790":{"card":2,"symbol":"currency"},"792":{"card":94,"symbol":"slash"},"793":{"card":2,"symbol":"pound"},"795":{"card":95,"symbol":"lozenge"},"796":{"card":1,"symbol":"currency"},"797":{"card":95,"symbol":"slash"},"798":{"card":1,"symbol":"pound"}},"checkCards":{"1":{"criterion":"purple_eq_4","options":{"30":2,"41":7}},"2":{"criterion":"no_one","options":{"8":0,"45":0,"47":0}},"3":{"criterion":"two_threes","options":{"9":2,"45":5,"46":4}},"4":{"criterion":"sum_even","options":{"18":0}},"5":{"criterion":"blue_plus_purple_eq_4","options":{"37":1}},"6":{"criterion":"blue_plus_yellow_lt_6","options":{"19":0}},"7":{"criterion":"purple_eq_1","options":{"28":2,"39":4}},"8":{"criterion":"blue_eq_purple","options":{"12":1,"43":3,"48":4}},"9":{"criterion":"one_triple","options":{"20":0}},"10":{"criterion":"yellow_plus_purple_eq_6","options":{"38":2}},"11":{"criterion":"two_consecutive_asc","options":{"24":1}},"12":{"criterion":"descending","options":{"22":1}},"13":{"criterion":"sum_is_multiple_of_4","options":{"36":1}},"14":{"criterion":"yellow_lt_blue_purple","options":{"14":1,"42":2}},"15":{"criterion":"sum_eq_6","options":{"23":1}},"16":{"criterion":"no_consecutive_asc_desc","options":{"25":0}},"17":{"criterion":"blue_plus_yellow_gt_6","options":{"19":2}},"18":{"criterion":"purple_lt_blue_yellow","options":{"14":2,"42":4}},"19":{"criterion":"yellow_gt_blue_purple","options":{"15":1,"42":3}},"20":{"criterion":"purple_ge_blue_yellow","options":{"35":2}},"21":{"criterion":"one_twin","options":{"21":1}},"22":{"criterion":"yellow_gt_3","options":{"3":2,"32":1,"40":5}},"23":{"criterion":"no_consecutive_asc","options":{"24":2}},"24":{"criterion":"one_one","options":{"8":1,"45":2,"47":2}},"25":{"criterion":"three_evens","options":{"17":3}},"26":{"criterion":"sum_lt_6","options":{"23":0}},"27":{"criterion":"no_fours","options":{"10":0,"46":1,"47":1}},"28":{"criterion":"one_four","options":{"10":1,"46":3,"47":3}},"29":{"criterion":"yellow_lt_3","options":{"3":0,"26":1,"40":3}},"30":{"criterion":"yellow_plus_purple_eq_4","options":{"37":2}},"31":{"criterion":"purple_lt_3","options":{"26":2,"40":6}},"32":{"criterion":"purple_even","options":{"7":0,"33":4}},"33":{"criterion":"ascending","options":{"22":0}},"34":{"criterion":"blue_eq_3","options":{"2":1,"29":0,"40":1}},"35":{"criterion":"yellow_gt_1","options":{"31":1,"39":3}},"36":{"criterion":"purple_gt_1","options":{"31":2,"39":5}},"37":{"criterion":"blue_gt_3","options":{"2":2,"32":0,"40":2}},"38":{"criterion":"blue_lt_4","options":{"27":0,"41":0}},"39":{"criterion":"yellow_eq_4","options":{"4":1,"30":1,"41":4}},"40":{"criterion":"two_ones","options":{"8":2,"45":4,"47":4}},"41":{"criterion":"yellow_eq_3","options":{"3":1,"29":1,"40":4}},"42":{"criterion":"purple_gt_3","options":{"32":2,"40":8}},"43":{"criterion":"purple_le_blue_yellow","options":{"34":2}},"44":{"criterion":"yellow_even","options":{"6":0,"33":2}},"45":{"criterion":"no_order","options":{"22":2}},"46":{"criterion":"blue_eq_1","options":{"1":0,"28":0,"39":0}},"47":{"criterion":"no_twin","options":{"21":0}},"48":{"criterion":"evens_lt_odds","options":{"16":1}},"49":{"criterion":"three_consecutive_asc_desc","options":{"25":2}},"50":{"criterion":"no_repeat","options":{"20":2}},"51":{"criterion":"no_evens","options":{"17":0}},"52":{"criterion":"yellow_odd","options":{"6":1,"33":3}},"53":{"criterion":"one_even","options":{"17":1}},"54":{"criterion":"purple_eq_3","options":{"29":2,"40":7}},"55":{"criterion":"sum_is_multiple_of_5","options":{"36":2}},"56":{"criterion":"two_fours","options":{"10":2,"46":5,"47":5}},"57":{"criterion":"blue_lt_yellow","options":{"11":0,"43":0,"44":4,"48":0}},"58":{"criterion":"yellow_le_blue_purple","options":{"34":1}},"59":{"criterion":"blue_odd","options":{"5":1,"33":1}},"60":{"criterion":"sum_is_multiple_of_3","options":{"36":0}},"61":{"criterion":"yellow_eq_1","options":{"28":1,"39":2}},"62":{"criterion":"sum_odd","options":{"18":1}},"63":{"criterion":"blue_lt_yellow_purple","options":{"14":0,"42":0}},"64":{"criterion":"blue_plus_purple_eq_6","options":{"38":1}},"65":{"criterion":"purple_gt_blue_yellow","options":{"15":2,"42":5}},"66":{"criterion":"blue_lt_purple","options":{"12":0,"43":1,"48":3}},"67":{"criterion":"two_evens","options":{"17":2}},"68":{"criterion":"blue_eq_4","options":{"30":0,"41":1}},"69":{"criterion":"yellow_gt_purple","options":{"13":2,"44":5,"48":8}},"70":{"criterion":"blue_le_yellow_purple","options":{"34":0}},"71":{"criterion":"evens_gt_odds","options":{"16":0}},"72":{"criterion":"no_three","options":{"9":0,"45":1,"46":0}},"73":{"criterion":"blue_gt_1","options":{"1":1,"31":0,"39":1}},"74":{"criterion":"purple_odd","options":{"7":1,"33":5}},"75":{"criterion":"blue_gt_yellow_purple","options":{"15":0,"42":1}},"76":{"criterion":"blue_ge_yellow_purple","options":{"35":0}},"77":{"criterion":"yellow_lt_4","options":{"4":0,"27":1,"41":3}},"78":{"criterion":"sum_gt_6","options":{"23":2}},"79":{"criterion":"yellow_gt_4","options":{"4":2,"41":5}},"80":{"criterion":"blue_gt_purple","options":{"12":2,"43":5,"48":5}},"81":{"criterion":"blue_plus_yellow_eq_4","options":{"37":0}},"82":{"criterion":"blue_gt_4","options":{"41":2}},"83":{"criterion":"purple_gt_4","options":{"41":8}},"84":{"criterion":"blue_gt_yellow","options":{"11":2,"43":4,"44":0,"48":2}},"85":{"criterion":"blue_eq_yellow","options":{"11":1,"43":2,"44":2,"48":1}},"86":{"criterion":"one_double","options":{"20":1}},"87":{"criterion":"two_consecutive_asc_desc","options":{"25":1}},"88":{"criterion":"blue_plus_yellow_eq_6","options":{"19":1,"38":0}},"89":{"criterion":"blue_even","options":{"5":0,"33":0}},"90":{"criterion":"yellow_ge_blue_purple","options":{"35":1}},"91":{"criterion":"yellow_eq_purple","options":{"13":1,"44":3,"48":7}},"92":{"criterion":"blue_lt_3","options":{"2":0,"26":0,"40":0}},"93":{"criterion":"one_three","options":{"9":1,"45":3,"46":2}},"94":{"criterion":"purple_lt_4","options":{"27":2,"41":6}},"95":{"criterion":"yellow_lt_purple","options":{"13":0,"44":1,"48":6}}}};
+window.VISUALS = {"cards":{"1":[{"s":"blue"},{"o":"?"},{"n":1}],"2":[{"s":"blue"},{"o":"?"},{"n":3}],"3":[{"s":"yellow"},{"o":"?"},{"n":3}],"4":[{"s":"yellow"},{"o":"?"},{"n":4}],"5":[{"s":"blue"},{"w":"EVEN"},{"o":"/"},{"w":"ODD"}],"6":[{"s":"yellow"},{"w":"EVEN"},{"o":"/"},{"w":"ODD"}],"7":[{"s":"purple"},{"w":"EVEN"},{"o":"/"},{"w":"ODD"}],"8":[{"c":"?","of":{"n":1}}],"9":[{"c":"?","of":{"n":3}}],"10":[{"c":"?","of":{"n":4}}],"11":[{"s":"blue"},{"o":"?"},{"s":"yellow"}],"12":[{"s":"blue"},{"o":"?"},{"s":"purple"}],"13":[{"s":"yellow"},{"o":"?"},{"s":"purple"}],"14":[{"g":"anycolour"},{"o":"\u003c"},{"g":"others"}],"15":[{"g":"anycolour"},{"o":">"},{"g":"others"}],"16":[{"w":"EVEN"},{"o":"?"},{"w":"ODD"}],"17":[{"c":"?","of":{"w":"EVEN"}}],"18":[{"k":"sum"},{"w":"EVEN"},{"o":"/"},{"w":"ODD"}],"19":[{"s":"blue"},{"o":"+"},{"s":"yellow"},{"o":"?"},{"n":6}],"20":[{"g":"double"},{"o":"/"},{"g":"triple"},{"o":"/"},{"g":"slash"}],"21":[{"g":"double"},{"o":"/"},{"g":"slash"}],"22":[{"g":"asc3"},{"o":"/"},{"g":"desc3"},{"o":"/"},{"g":"noorder"}],"23":[{"k":"sum"},{"o":"?"},{"n":6}],"24":[{"g":"run2"},{"o":"/"},{"g":"run3"}],"25":[{"g":"run2"},{"o":"/"},{"g":"rund2"}],"26":[{"g":"anycolour"},{"o":"\u003c"},{"n":3}],"27":[{"g":"anycolour"},{"o":"\u003c"},{"n":4}],"28":[{"g":"anycolour"},{"o":"="},{"n":1}],"29":[{"g":"anycolour"},{"o":"="},{"n":3}],"30":[{"g":"anycolour"},{"o":"="},{"n":4}],"31":[{"g":"anycolour"},{"o":">"},{"n":1}],"32":[{"g":"anycolour"},{"o":">"},{"n":3}],"33":[{"g":"anycolour"},{"w":"EVEN"},{"o":"/"},{"w":"ODD"}],"34":[{"g":"anycolour"},{"o":"≤"},{"g":"others"}],"35":[{"g":"anycolour"},{"o":"≥"},{"g":"others"}],"36":[{"k":"sum"},{"o":"="},{"w":"3n"},{"o":"/"},{"w":"4n"},{"o":"/"},{"w":"5n"}],"37":[{"g":"anycolour"},{"o":"+"},{"g":"anycolour"},{"o":"="},{"n":4}],"38":[{"g":"anycolour"},{"o":"+"},{"g":"anycolour"},{"o":"="},{"n":6}],"39":[{"g":"anycolour"},{"o":"?"},{"n":1}],"40":[{"g":"anycolour"},{"o":"?"},{"n":3}],"41":[{"g":"anycolour"},{"o":"?"},{"n":4}],"42":[{"g":"anycolour"},{"o":"\u003c"},{"o":"/"},{"o":">"},{"g":"others"}],"43":[{"s":"blue"},{"o":"?"},{"g":"anycolour"}],"44":[{"s":"yellow"},{"o":"?"},{"g":"anycolour"}],"45":[{"c":"?","of":{"n":1}},{"o":"/"},{"c":"?","of":{"n":3}}],"46":[{"c":"?","of":{"n":3}},{"o":"/"},{"c":"?","of":{"n":4}}],"47":[{"c":"?","of":{"n":1}},{"o":"/"},{"c":"?","of":{"n":4}}],"48":[{"g":"anycolour"},{"o":"?"},{"g":"anycolour"}]},"options":{"1":[[{"s":"blue"},{"o":"="},{"n":1}],[{"s":"blue"},{"o":">"},{"n":1}]],"2":[[{"s":"blue"},{"o":"\u003c"},{"n":3}],[{"s":"blue"},{"o":"="},{"n":3}],[{"s":"blue"},{"o":">"},{"n":3}]],"3":[[{"s":"yellow"},{"o":"\u003c"},{"n":3}],[{"s":"yellow"},{"o":"="},{"n":3}],[{"s":"yellow"},{"o":">"},{"n":3}]],"4":[[{"s":"yellow"},{"o":"\u003c"},{"n":4}],[{"s":"yellow"},{"o":"="},{"n":4}],[{"s":"yellow"},{"o":">"},{"n":4}]],"5":[[{"s":"blue"},{"w":"EVEN"}],[{"s":"blue"},{"w":"ODD"}]],"6":[[{"s":"yellow"},{"w":"EVEN"}],[{"s":"yellow"},{"w":"ODD"}]],"7":[[{"s":"purple"},{"w":"EVEN"}],[{"s":"purple"},{"w":"ODD"}]],"8":[[{"c":0,"of":{"n":1}}],[{"c":1,"of":{"n":1}}],[{"c":2,"of":{"n":1}}],[{"c":3,"of":{"n":1}}]],"9":[[{"c":0,"of":{"n":3}}],[{"c":1,"of":{"n":3}}],[{"c":2,"of":{"n":3}}],[{"c":3,"of":{"n":3}}]],"10":[[{"c":0,"of":{"n":4}}],[{"c":1,"of":{"n":4}}],[{"c":2,"of":{"n":4}}],[{"c":3,"of":{"n":4}}]],"11":[[{"s":"blue"},{"o":"\u003c"},{"s":"yellow"}],[{"s":"blue"},{"o":"="},{"s":"yellow"}],[{"s":"blue"},{"o":">"},{"s":"yellow"}]],"12":[[{"s":"blue"},{"o":"\u003c"},{"s":"purple"}],[{"s":"blue"},{"o":"="},{"s":"purple"}],[{"s":"blue"},{"o":">"},{"s":"purple"}]],"13":[[{"s":"yellow"},{"o":"\u003c"},{"s":"purple"}],[{"s":"yellow"},{"o":"="},{"s":"purple"}],[{"s":"yellow"},{"o":">"},{"s":"purple"}]],"14":[[{"s":"blue"},{"o":"\u003c"},{"s":"purple"},{"s":"yellow"}],[{"s":"yellow"},{"o":"\u003c"},{"s":"blue"},{"s":"purple"}],[{"s":"purple"},{"o":"\u003c"},{"s":"yellow"},{"s":"blue"}]],"15":[[{"s":"blue"},{"o":">"},{"s":"purple"},{"s":"yellow"}],[{"s":"yellow"},{"o":">"},{"s":"blue"},{"s":"purple"}],[{"s":"purple"},{"o":">"},{"s":"yellow"},{"s":"blue"}]],"16":[[{"w":"EVEN"},{"o":">"},{"w":"ODD"}],[{"w":"ODD"},{"o":">"},{"w":"EVEN"}]],"17":[[{"c":0,"of":{"w":"EVEN"}}],[{"c":1,"of":{"w":"EVEN"}}],[{"c":2,"of":{"w":"EVEN"}}],[{"c":3,"of":{"w":"EVEN"}}]],"18":[[{"k":"sum"},{"w":"EVEN"}],[{"k":"sum"},{"w":"ODD"}]],"19":[[{"s":"blue"},{"o":"+"},{"s":"yellow"},{"o":"\u003c"},{"n":6}],[{"s":"blue"},{"o":"+"},{"s":"yellow"},{"o":"="},{"n":6}],[{"s":"blue"},{"o":"+"},{"s":"yellow"},{"o":">"},{"n":6}]],"20":[[{"g":"triple"}],[{"g":"double"}],[{"g":"double"},{"o":"/"},{"g":"triple"},{"g":"slash"}]],"21":[[{"g":"double"},{"g":"slash"}],[{"g":"double"}]],"22":[[{"g":"asc3"}],[{"g":"desc3"}],[{"g":"noorder"}]],"23":[[{"k":"sum"},{"o":"\u003c"},{"n":6}],[{"k":"sum"},{"o":"="},{"n":6}],[{"k":"sum"},{"o":">"},{"n":6}]],"24":[[{"g":"run3"}],[{"g":"run2"}],[{"g":"run2"},{"g":"slash"}]],"25":[[{"g":"run2"},{"o":"/"},{"g":"rund2"},{"g":"slash"}],[{"g":"run2"},{"o":"/"},{"g":"rund2"}],[{"g":"run3"},{"o":"/"},{"g":"rund3"}]],"26":[[{"s":"blue"},{"o":"\u003c"},{"n":3}],[{"s":"yellow"},{"o":"\u003c"},{"n":3}],[{"s":"purple"},{"o":"\u003c"},{"n":3}]],"27":[[{"s":"blue"},{"o":"\u003c"},{"n":4}],[{"s":"yellow"},{"o":"\u003c"},{"n":4}],[{"s":"purple"},{"o":"\u003c"},{"n":4}]],"28":[[{"s":"blue"},{"o":"="},{"n":1}],[{"s":"yellow"},{"o":"="},{"n":1}],[{"s":"purple"},{"o":"="},{"n":1}]],"29":[[{"s":"blue"},{"o":"="},{"n":3}],[{"s":"yellow"},{"o":"="},{"n":3}],[{"s":"purple"},{"o":"="},{"n":3}]],"30":[[{"s":"blue"},{"o":"="},{"n":4}],[{"s":"yellow"},{"o":"="},{"n":4}],[{"s":"purple"},{"o":"="},{"n":4}]],"31":[[{"s":"blue"},{"o":">"},{"n":1}],[{"s":"yellow"},{"o":">"},{"n":1}],[{"s":"purple"},{"o":">"},{"n":1}]],"32":[[{"s":"blue"},{"o":">"},{"n":3}],[{"s":"yellow"},{"o":">"},{"n":3}],[{"s":"purple"},{"o":">"},{"n":3}]],"33":[[{"s":"blue"},{"w":"EVEN"}],[{"s":"blue"},{"w":"ODD"}],[{"s":"yellow"},{"w":"EVEN"}],[{"s":"yellow"},{"w":"ODD"}],[{"s":"purple"},{"w":"EVEN"}],[{"s":"purple"},{"w":"ODD"}]],"34":[[{"s":"blue"},{"o":"≤"},{"g":"others"}],[{"s":"yellow"},{"o":"≤"},{"g":"others"}],[{"s":"purple"},{"o":"≤"},{"g":"others"}]],"35":[[{"s":"blue"},{"o":"≥"},{"g":"others"}],[{"s":"yellow"},{"o":"≥"},{"g":"others"}],[{"s":"purple"},{"o":"≥"},{"g":"others"}]],"36":[[{"k":"sum"},{"o":"="},{"w":"3n"}],[{"k":"sum"},{"o":"="},{"w":"4n"}],[{"k":"sum"},{"o":"="},{"w":"5n"}]],"37":[[{"s":"blue"},{"o":"+"},{"s":"yellow"},{"o":"="},{"n":4}],[{"s":"blue"},{"o":"+"},{"s":"purple"},{"o":"="},{"n":4}],[{"s":"yellow"},{"o":"+"},{"s":"purple"},{"o":"="},{"n":4}]],"38":[[{"s":"blue"},{"o":"+"},{"s":"yellow"},{"o":"="},{"n":6}],[{"s":"blue"},{"o":"+"},{"s":"purple"},{"o":"="},{"n":6}],[{"s":"yellow"},{"o":"+"},{"s":"purple"},{"o":"="},{"n":6}]],"39":[[{"s":"blue"},{"o":"="},{"n":1}],[{"s":"blue"},{"o":">"},{"n":1}],[{"s":"yellow"},{"o":"="},{"n":1}],[{"s":"yellow"},{"o":">"},{"n":1}],[{"s":"purple"},{"o":"="},{"n":1}],[{"s":"purple"},{"o":">"},{"n":1}]],"40":[[{"s":"blue"},{"o":"\u003c"},{"n":3}],[{"s":"blue"},{"o":"="},{"n":3}],[{"s":"blue"},{"o":">"},{"n":3}],[{"s":"yellow"},{"o":"\u003c"},{"n":3}],[{"s":"yellow"},{"o":"="},{"n":3}],[{"s":"yellow"},{"o":">"},{"n":3}],[{"s":"purple"},{"o":"\u003c"},{"n":3}],[{"s":"purple"},{"o":"="},{"n":3}],[{"s":"purple"},{"o":">"},{"n":3}]],"41":[[{"s":"blue"},{"o":"\u003c"},{"n":4}],[{"s":"blue"},{"o":"="},{"n":4}],[{"s":"blue"},{"o":">"},{"n":4}],[{"s":"yellow"},{"o":"\u003c"},{"n":4}],[{"s":"yellow"},{"o":"="},{"n":4}],[{"s":"yellow"},{"o":">"},{"n":4}],[{"s":"purple"},{"o":"\u003c"},{"n":4}],[{"s":"purple"},{"o":"="},{"n":4}],[{"s":"purple"},{"o":">"},{"n":4}]],"42":[[{"s":"blue"},{"o":"\u003c"},{"g":"others"}],[{"s":"blue"},{"o":">"},{"g":"others"}],[{"s":"yellow"},{"o":"\u003c"},{"g":"others"}],[{"s":"yellow"},{"o":">"},{"g":"others"}],[{"s":"purple"},{"o":"\u003c"},{"g":"others"}],[{"s":"purple"},{"o":">"},{"g":"others"}]],"43":[[{"s":"blue"},{"o":"\u003c"},{"s":"yellow"}],[{"s":"blue"},{"o":"\u003c"},{"s":"purple"}],[{"s":"blue"},{"o":"="},{"s":"yellow"}],[{"s":"blue"},{"o":"="},{"s":"purple"}],[{"s":"blue"},{"o":">"},{"s":"yellow"}],[{"s":"blue"},{"o":">"},{"s":"purple"}]],"44":[[{"s":"yellow"},{"o":"\u003c"},{"s":"blue"}],[{"s":"yellow"},{"o":"\u003c"},{"s":"purple"}],[{"s":"yellow"},{"o":"="},{"s":"blue"}],[{"s":"yellow"},{"o":"="},{"s":"purple"}],[{"s":"yellow"},{"o":">"},{"s":"blue"}],[{"s":"yellow"},{"o":">"},{"s":"purple"}]],"45":[[{"c":0,"of":{"n":1}}],[{"c":0,"of":{"n":3}}],[{"c":1,"of":{"n":1}}],[{"c":1,"of":{"n":3}}],[{"c":2,"of":{"n":1}}],[{"c":2,"of":{"n":3}}]],"46":[[{"c":0,"of":{"n":3}}],[{"c":0,"of":{"n":4}}],[{"c":1,"of":{"n":3}}],[{"c":1,"of":{"n":4}}],[{"c":2,"of":{"n":3}}],[{"c":2,"of":{"n":4}}]],"47":[[{"c":0,"of":{"n":1}}],[{"c":0,"of":{"n":4}}],[{"c":1,"of":{"n":1}}],[{"c":1,"of":{"n":4}}],[{"c":2,"of":{"n":1}}],[{"c":2,"of":{"n":4}}]],"48":[[{"s":"blue"},{"o":"\u003c"},{"s":"yellow"}],[{"s":"blue"},{"o":"="},{"s":"yellow"}],[{"s":"blue"},{"o":">"},{"s":"yellow"}],[{"s":"blue"},{"o":"\u003c"},{"s":"purple"}],[{"s":"blue"},{"o":"="},{"s":"purple"}],[{"s":"blue"},{"o":">"},{"s":"purple"}],[{"s":"yellow"},{"o":"\u003c"},{"s":"purple"}],[{"s":"yellow"},{"o":"="},{"s":"purple"}],[{"s":"yellow"},{"o":">"},{"s":"purple"}]]}};</script>
+<script>
+/* ==========================================================================
+   TURING MACHINE — deduction engine
+   Pure logic. No DOM. Safe to run in node for tests.
+   A "code" is [b, y, p] with each value in 1..5  →  125 possible codes.
+   Codes are indexed 0..124 as (b-1)*25 + (y-1)*5 + (p-1).
+   Sets of codes are 128-bit masks stored as Uint32Array(4).
+   ========================================================================== */
+
+const N_CODES = 125;
+
+/* ---------- code helpers ---------- */
+
+function codeIndex(b, y, p) { return (b - 1) * 25 + (y - 1) * 5 + (p - 1); }
+
+function codeFromIndex(i) {
+  return [Math.floor(i / 25) + 1, Math.floor(i / 5) % 5 + 1, (i % 5) + 1];
+}
+
+const ALL_CODES = Array.from({ length: N_CODES }, (_, i) => codeFromIndex(i));
+
+/* ---------- 128-bit masks ---------- */
+
+function maskNew() { return new Uint32Array(4); }
+function maskSet(m, i) { m[i >>> 5] |= (1 << (i & 31)); }
+function maskGet(m, i) { return (m[i >>> 5] >>> (i & 31)) & 1; }
+function maskFull() {
+  const m = maskNew();
+  for (let i = 0; i < N_CODES; i++) maskSet(m, i);
+  return m;
+}
+function maskAnd(a, b, out) {
+  const o = out || maskNew();
+  o[0] = a[0] & b[0]; o[1] = a[1] & b[1]; o[2] = a[2] & b[2]; o[3] = a[3] & b[3];
+  return o;
+}
+function maskOr(a, b, out) {
+  const o = out || maskNew();
+  o[0] = a[0] | b[0]; o[1] = a[1] | b[1]; o[2] = a[2] | b[2]; o[3] = a[3] | b[3];
+  return o;
+}
+function popcount32(v) {
+  v = v - ((v >>> 1) & 0x55555555);
+  v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
+  v = (v + (v >>> 4)) & 0x0f0f0f0f;
+  return (v * 0x01010101) >>> 24;
+}
+function maskCount(m) {
+  return popcount32(m[0]) + popcount32(m[1]) + popcount32(m[2]) + popcount32(m[3]);
+}
+function maskFirst(m) {
+  for (let w = 0; w < 4; w++) {
+    if (m[w] === 0) continue;
+    for (let bit = 0; bit < 32; bit++) {
+      if ((m[w] >>> bit) & 1) return w * 32 + bit;
+    }
+  }
+  return -1;
+}
+function maskToIndices(m) {
+  const out = [];
+  for (let i = 0; i < N_CODES; i++) if (maskGet(m, i)) out.push(i);
+  return out;
+}
+
+/* ---------- criteria compilation ---------- */
+
+/**
+ * Takes the raw criteria.json array and attaches, for every verifier variant,
+ * the precomputed mask of codes that satisfy it.
+ */
+function compileCriteria(raw) {
+  const cards = raw.map((card) => {
+    const verifiers = card.verifiers.map((v, vi) => {
+      let fn;
+      try {
+        // eslint-disable-next-line no-new-func
+        fn = new Function('b', 'y', 'p', 'return !!(' + v.expr + ');');
+      } catch (e) {
+        throw new Error(`Card ${card.id} variant ${vi}: cannot compile expr "${v.expr}" — ${e.message}`);
+      }
+      const mask = maskNew();
+      for (let i = 0; i < N_CODES; i++) {
+        const [b, y, p] = ALL_CODES[i];
+        if (fn(b, y, p)) maskSet(mask, i);
+      }
+      return { index: vi, text: v.text, expr: v.expr, fn, mask };
+    });
+    return { id: card.id, title: card.title, description: card.description, verifiers };
+  });
+
+  const byId = new Map(cards.map((c) => [c.id, c]));
+  return { cards, byId, get: (id) => byId.get(id) };
+}
+
+/**
+ * Sanity checks for the criteria deck.
+ *
+ * Note on exclusivity: a criteria card is a *menu* of possible settings, not a
+ * partition of the code space. Only cards 1–25 have mutually exclusive
+ * variants; from 26 up a card offers things like "blue is even / blue is odd /
+ * yellow is even / …", where several options can be true of one code at once.
+ * So we only assert exclusivity where the game actually has it.
+ */
+const MUTUALLY_EXCLUSIVE_UP_TO = 25;
+
+function validateDeck(deck) {
+  const problems = [];
+  for (const card of deck.cards) {
+    if (!card.verifiers.length) problems.push({ cardId: card.id, kind: 'no-variants' });
+
+    for (const v of card.verifiers) {
+      const n = maskCount(v.mask);
+      if (n === 0) problems.push({ cardId: card.id, kind: 'never-true', text: v.text });
+      if (n === N_CODES) problems.push({ cardId: card.id, kind: 'always-true', text: v.text });
+    }
+
+    if (card.id <= MUTUALLY_EXCLUSIVE_UP_TO) {
+      for (let i = 0; i < N_CODES; i++) {
+        let hits = 0;
+        for (const v of card.verifiers) hits += maskGet(v.mask, i);
+        if (hits > 1) {
+          problems.push({ cardId: card.id, kind: 'not-exclusive', code: codeFromIndex(i), matches: hits });
+          break;
+        }
+      }
+    }
+  }
+  return problems;
+}
+
+/* ---------- puzzle validity ---------- */
+
+/**
+ * An assignment is [{ cardId, variantIndex }, ...].
+ * A puzzle is legal when:
+ *   1. exactly one of the 125 codes satisfies every chosen verifier, and
+ *   2. no verifier is redundant — dropping any one of them makes the
+ *      solution ambiguous (this is the official "no useless card" rule).
+ */
+function checkAssignment(deck, assignment) {
+  const masks = assignment.map((a) => deck.get(a.cardId).verifiers[a.variantIndex].mask);
+  let all = maskFull();
+  for (const m of masks) all = maskAnd(all, m);
+  const count = maskCount(all);
+  if (count !== 1) {
+    return { ok: false, reason: count === 0 ? 'no-solution' : 'ambiguous', count };
+  }
+
+  // Playable, but is any card doing nothing? Worth flagging, not fatal.
+  let redundantIndex = -1;
+  for (let skip = 0; skip < masks.length; skip++) {
+    let m = maskFull();
+    for (let i = 0; i < masks.length; i++) if (i !== skip) m = maskAnd(m, masks[i]);
+    if (maskCount(m) === 1) { redundantIndex = skip; break; }
+  }
+
+  return {
+    ok: true,
+    count,
+    solution: codeFromIndex(maskFirst(all)),
+    solutionIndex: maskFirst(all),
+    redundant: redundantIndex !== -1,
+    redundantIndex: redundantIndex === -1 ? null : redundantIndex,
+  };
+}
+
+/**
+ * Enumerate every legal variant assignment for a fixed set of card ids.
+ * Returns { assignments: [{ variants:[i,...], solutionIndex }], truncated,
+ *           spread } where `spread` is how many *distinct* codes those
+ * assignments point at.
+ *
+ * `spread` matters more than it looks. A player can see the card numbers, so
+ * they can reason about which settings would be legal at all. If every legal
+ * setting of the chosen cards leads to the same code (spread === 1), the
+ * puzzle answers itself before a single test is made.
+ *
+ * opts.allowRedundant — skip the "every card must matter" rule.
+ * opts.limit          — guard against pathological card sets.
+ */
+function enumerateAssignments(deck, cardIds, opts = {}) {
+  const { allowRedundant = false, limit = 400000 } =
+    typeof opts === 'number' ? { limit: opts } : opts;
+
+  const cards = cardIds.map((id) => deck.get(id));
+  if (cards.some((c) => !c)) throw new Error('unknown card id in ' + JSON.stringify(cardIds));
+
+  const out = [];
+  let truncated = false;
+
+  const variants = new Array(cards.length).fill(0);
+  const partial = Array.from({ length: cards.length + 1 }, () => maskNew());
+  partial[0].set(maskFull());
+
+  let examined = 0;
+  let uniqueCount = 0;
+
+  const recurse = (depth) => {
+    if (truncated) return;
+    if (depth === cards.length) {
+      examined++;
+      if (examined > limit) { truncated = true; return; }
+      const all = partial[cards.length];
+      if (maskCount(all) !== 1) return;
+      uniqueCount++;   // passes rule 1; rule 2 may still reject it
+      if (!allowRedundant) {
+        for (let skip = 0; skip < cards.length; skip++) {
+          let m = maskFull();
+          for (let i = 0; i < cards.length; i++) {
+            if (i !== skip) m = maskAnd(m, cards[i].verifiers[variants[i]].mask);
+          }
+          if (maskCount(m) === 1) return; // that card was redundant
+        }
+      }
+      out.push({ variants: variants.slice(), solutionIndex: maskFirst(all) });
+      return;
+    }
+    const card = cards[depth];
+    for (let v = 0; v < card.verifiers.length; v++) {
+      maskAnd(partial[depth], card.verifiers[v].mask, partial[depth + 1]);
+      if (maskCount(partial[depth + 1]) === 0) continue; // prune dead branches
+      variants[depth] = v;
+      recurse(depth + 1);
+      if (truncated) return;
+    }
+  };
+
+  recurse(0);
+  const spread = new Set(out.map((a) => a.solutionIndex)).size;
+  return { assignments: out, truncated, spread, uniqueCount };
+}
+
+/* ---------- puzzle generation ---------- */
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffled(arr, rnd) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* A puzzle whose card numbers alone give the game away isn't a puzzle. We
+   insist a randomly dealt set leaves at least this many codes in play. */
+const MIN_SPREAD = 4;
+
+/**
+ * Build a playable puzzle.
+ *   opts.cardIds   – exact cards to use (order preserved). Optional.
+ *   opts.count     – how many verifiers when cards are drawn at random.
+ *   opts.rnd       – random source.
+ *   opts.tries     – how many random card sets to attempt.
+ *   opts.minSpread – reject card sets that give away too much (random mode).
+ *
+ * Returns { cardIds, variants, solution, spread, relaxed } or throws with
+ * .code = 'NO_LEGAL_ASSIGNMENT' | 'GENERATION_FAILED'.
+ */
+function generatePuzzle(deck, opts = {}) {
+  const rnd = opts.rnd || Math.random;
+  const allIds = deck.cards.map((c) => c.id);
+
+  const build = (cardIds, res, relaxed) => {
+    const pick = res.assignments[Math.floor(rnd() * res.assignments.length)];
+    return {
+      cardIds: cardIds.slice(),
+      variants: pick.variants,
+      solution: codeFromIndex(pick.solutionIndex),
+      spread: res.spread,
+      relaxed: relaxed || null,
+      redundant: relaxed === 'redundant',
+    };
+  };
+
+  /* --- the player named the cards: honour them, relaxing rules if we must --- */
+  if (opts.cardIds && opts.cardIds.length) {
+    const strict = enumerateAssignments(deck, opts.cardIds);
+    if (strict.assignments.length) return build(opts.cardIds, strict, null);
+
+    // Nothing satisfies "every card matters". Rather than refuse the player's
+    // own cards, drop that one rule and say so.
+    const loose = enumerateAssignments(deck, opts.cardIds, { allowRedundant: true });
+    if (loose.assignments.length) return build(opts.cardIds, loose, 'redundant');
+
+    const err = new Error('no-legal-assignment');
+    err.code = 'NO_LEGAL_ASSIGNMENT';
+    throw err;
+  }
+
+  /* --- random deal: keep dealing until we get a set worth playing --- */
+  const count = opts.count || 5;
+  const tries = opts.tries || 600;
+  const minSpread = opts.minSpread == null ? MIN_SPREAD : opts.minSpread;
+  let fallback = null;
+
+  for (let t = 0; t < tries; t++) {
+    const cardIds = shuffled(allIds, rnd).slice(0, count);
+    let res;
+    try { res = enumerateAssignments(deck, cardIds, { limit: 120000 }); }
+    catch (e) { continue; }
+    if (!res.assignments.length) continue;
+    if (res.spread >= minSpread) return build(cardIds, res, null);
+    if (!fallback || res.spread > fallback.res.spread) fallback = { cardIds, res };
+  }
+
+  if (fallback && fallback.res.spread > 1) return build(fallback.cardIds, fallback.res, 'shallow');
+
+  const err = new Error('generation-failed');
+  err.code = 'GENERATION_FAILED';
+  throw err;
+}
+
+/**
+ * A "no questions" puzzle: a card set whose numbers alone force the answer.
+ *
+ * In the ordinary game this is a defect — if every legal setting of the chosen
+ * cards points at the same code, asking the machine anything is pointless, so
+ * generatePuzzle rejects it. As a deliberate variant it is the whole puzzle:
+ * the player reasons from the card list and the two standing rules (exactly
+ * one code fits; no card is idle) with no answers to go on at all.
+ *
+ * opts.ways: 'single' (default) insists there is exactly one legal setting, so
+ * the settings themselves are deducible. 'any' also allows sets where several
+ * settings are legal but all agree on the code — a subtler puzzle, since the
+ * code is knowable while the settings are not.
+ */
+/*
+ * What makes one of these hard is not how many cards it has — it is how many
+ * of them are cards 26-48. Those offer a *menu* of separate criteria rather
+ * than mutually exclusive states, so several options can be true of one code
+ * at once and you cannot reason "this one holds, so the others don't".
+ *
+ * Measured over 300 self-solving sets: with no menu cards the median set has
+ * 108 possible settings and 11 that survive rule 1 (and so must be knocked out
+ * by rule 2); with four menu cards it is 1,944 and 187.
+ */
+const COLD_TIERS = {
+  gentle:   { exclusiveOnly: true,  maxSpace: 220,  maxSurvivors: 20 },
+  standard: { exclusiveOnly: false, maxSpace: 1200, maxSurvivors: 90 },
+  tough:    { exclusiveOnly: false, minMenus: 3 },
+};
+
+function generateColdPuzzle(deck, opts = {}) {
+  const rnd = opts.rnd || Math.random;
+  const count = opts.count || 5;
+  const tries = opts.tries || 12000;
+  const wantSingle = (opts.ways || 'single') === 'single';
+  const tier = COLD_TIERS[opts.difficulty] || COLD_TIERS.standard;
+  const allIds = deck.cards
+    .filter((c) => !tier.exclusiveOnly || c.id <= MUTUALLY_EXCLUSIVE_UP_TO)
+    .map((c) => c.id);
+  let fallback = null;
+
+  for (let t = 0; t < tries; t++) {
+    const cardIds = shuffled(allIds, rnd).slice(0, count);
+
+    const space = cardIds.reduce((a, id) => a * deck.get(id).verifiers.length, 1);
+    if (tier.maxSpace && space > tier.maxSpace) continue;
+    if (tier.minMenus &&
+        cardIds.filter((id) => id > MUTUALLY_EXCLUSIVE_UP_TO).length < tier.minMenus) continue;
+
+    let res;
+    try { res = enumerateAssignments(deck, cardIds, { limit: 120000 }); }
+    catch (e) { continue; }
+    if (!res.assignments.length || res.spread !== 1) continue;
+    if (tier.maxSurvivors && res.uniqueCount > tier.maxSurvivors) continue;
+
+    const puzzle = {
+      cardIds,
+      variants: res.assignments[0].variants,
+      solution: codeFromIndex(res.assignments[0].solutionIndex),
+      spread: 1,
+      cold: true,
+      ways: res.assignments.length,
+      survivors: res.uniqueCount,
+      difficulty: opts.difficulty || 'standard',
+      searchSpace: cardIds.reduce((a, id) => a * deck.get(id).verifiers.length, 1),
+      relaxed: null,
+      redundant: false,
+    };
+    if (!wantSingle || res.assignments.length === 1) return puzzle;
+    if (!fallback) fallback = puzzle;
+  }
+
+  if (fallback) return fallback;
+  const err = new Error('generation-failed');
+  err.code = 'GENERATION_FAILED';
+  throw err;
+}
+
+/**
+ * Does this card set answer itself? Derived, not stored — so a shared puzzle
+ * arrives in the right mode without spending a bit in the share code.
+ */
+function coldness(deck, puzzle) {
+  const res = enumerateAssignments(deck, puzzle.cardIds,
+    { allowRedundant: !!puzzle.redundant });
+  return {
+    cold: res.spread === 1,
+    ways: res.assignments.length,
+    survivors: res.uniqueCount,
+    spread: res.spread,
+    searchSpace: puzzle.cardIds.reduce((a, id) => a * deck.get(id).verifiers.length, 1),
+  };
+}
+
+/* ---------- share codes ---------- */
+/*
+ * Bit layout:  [4 bits version][4 bits n][n × (6 bits cardId-1, 4 bits variant)]
+ * Rendered in Crockford base32 — uppercase, case-insensitive, and free of the
+ * I/L/O/U characters people mishear. A 6-verifier puzzle is 14 characters,
+ * short enough to read aloud over a video call.
+ */
+
+const SHARE_VERSION = 1;
+const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const B32_LOOKUP = (() => {
+  const m = new Map();
+  for (let i = 0; i < B32.length; i++) m.set(B32[i], i);
+  // forgiving aliases for the characters Crockford drops
+  m.set('O', 0); m.set('I', 1); m.set('L', 1); m.set('U', B32.indexOf('V'));
+  return m;
+})();
+
+function encodePuzzle(puzzle) {
+  const bits = [];
+  const push = (value, width) => {
+    for (let i = width - 1; i >= 0; i--) bits.push((value >> i) & 1);
+  };
+  push(SHARE_VERSION, 4);
+  push(puzzle.cardIds.length, 4);
+  puzzle.cardIds.forEach((id, i) => {
+    push(id - 1, 6);
+    push(puzzle.variants[i], 4);
+  });
+  /* The payload is 8 + 10n bits, which always leaves exactly 2 bits of
+     padding. Spend one of them on "this came off turingmachine.info" so the
+     provenance survives being shared — a friend who pastes the code should see
+     the same label the importer saw. Codes made before this flag existed have
+     it zero, so they still read as ordinary puzzles. */
+  bits.push(puzzle.official ? 1 : 0);
+  while (bits.length % 5 !== 0) bits.push(0);
+
+  let out = '';
+  for (let i = 0; i < bits.length; i += 5) {
+    let v = 0;
+    for (let j = 0; j < 5; j++) v = (v << 1) | bits[i + j];
+    out += B32[v];
+  }
+  return out.replace(/(.{5})(?=.)/g, '$1-');
+}
+
+function decodePuzzle(deck, codeStr) {
+  if (!codeStr) throw new Error('Enter a puzzle code first.');
+  const cleaned = String(codeStr).trim().toUpperCase()
+    .replace(/^TM[:\-\s]*/, '')
+    .replace(/[-\s_]/g, '');
+  if (!cleaned) throw new Error('Enter a puzzle code first.');
+
+  const bits = [];
+  for (const ch of cleaned) {
+    if (!B32_LOOKUP.has(ch)) throw new Error(`“${ch}” isn’t a character we use in puzzle codes.`);
+    const v = B32_LOOKUP.get(ch);
+    for (let i = 4; i >= 0; i--) bits.push((v >> i) & 1);
+  }
+  let cursor = 0;
+  const take = (width) => {
+    if (cursor + width > bits.length) throw new Error('That code is too short — is any of it missing?');
+    let v = 0;
+    for (let i = 0; i < width; i++) v = (v << 1) | bits[cursor + i];
+    cursor += width;
+    return v;
+  };
+
+  const version = take(4);
+  if (version !== SHARE_VERSION) throw new Error('That code came from a different version of the app.');
+  const n = take(4);
+  if (n < 1 || n > 12) throw new Error('That code doesn’t look like a puzzle.');
+
+  const cardIds = [];
+  const variants = [];
+  for (let i = 0; i < n; i++) {
+    const id = take(6) + 1;
+    const vi = take(4);
+    const card = deck.get(id);
+    if (!card) throw new Error(`That code refers to criteria card ${id}, which doesn’t exist.`);
+    if (vi >= card.verifiers.length) throw new Error(`That code refers to an option card ${id} doesn’t have.`);
+    cardIds.push(id); variants.push(vi);
+  }
+  const official = cursor < bits.length ? take(1) === 1 : false;
+
+  const check = checkAssignment(deck, cardIds.map((cardId, i) => ({ cardId, variantIndex: variants[i] })));
+  if (!check.ok) {
+    throw new Error(check.reason === 'ambiguous'
+      ? 'That code decodes to a puzzle with ' + check.count + ' possible answers, so it can’t be played.'
+      : 'That code decodes to a puzzle no code can satisfy.');
+  }
+  /* `relaxed` has to survive the round trip: a shared or reloaded puzzle is the
+     same puzzle, so whoever opens the code needs the same "one card here is
+     redundant" warning the builder saw. */
+  return {
+    cardIds, variants, solution: check.solution,
+    redundant: check.redundant,
+    relaxed: check.redundant ? 'redundant' : null,
+    official,
+  };
+}
+
+/* ---------- official puzzles ---------- */
+/*
+ * turingmachine.info states a puzzle as criteria card number + *verification*
+ * card number. The verification number is the secret half: it names which
+ * option of that criteria card is active. The mapping lives on the physical
+ * verification cards, but it has been transcribed (see data/OFFICIAL_IMPORT.md)
+ * — 95 check cards × 4 symbol columns = 380 globally unique numbers.
+ *
+ * pairs: [{ cardId, verification }]. Returns the same puzzle shape as
+ * generatePuzzle, so an imported puzzle plays and shares like any other.
+ */
+function decodeOfficial(deck, table, pairs) {
+  if (!pairs || pairs.length < 4 || pairs.length > 6) {
+    throw new Error('An official puzzle has between 4 and 6 verifiers.');
+  }
+
+  const seen = new Set();
+  const slots = pairs.map(({ cardId, verification }, i) => {
+    const letter = 'ABCDEF'[i];
+    const card = deck.get(cardId);
+    if (!card) throw new Error(`${letter}: there is no criteria card ${cardId}.`);
+    if (seen.has(cardId)) throw new Error(`Criteria card ${cardId} is listed twice.`);
+    seen.add(cardId);
+
+    const entry = table.numbers[verification];
+    if (!entry) {
+      throw new Error(`${letter}: ${verification} isn’t a verification card number. ` +
+        'They run from 201 to 798 — check for a typo.');
+    }
+    const check = table.checkCards[entry.card];
+    const variantIndex = check.options[cardId];
+    if (variantIndex === undefined) {
+      throw new Error(`${letter}: verification card ${verification} doesn’t go with ` +
+        `criteria card ${cardId}. One of the two numbers is off.`);
+    }
+    return { cardId, verification, variantIndex, symbol: entry.symbol };
+  });
+
+  // Every verification number in a real puzzle is drawn from the same symbol
+  // column, so a mismatch means a mistyped number that happened to be valid.
+  const symbols = [...new Set(slots.map((s) => s.symbol))];
+  if (symbols.length > 1) {
+    throw new Error('Those verification numbers come from different symbol columns ' +
+      `(${symbols.join(', ')}), which never happens in a real puzzle. ` +
+      'One of them is probably mistyped.');
+  }
+
+  const check = checkAssignment(deck, slots.map((s) => ({ cardId: s.cardId, variantIndex: s.variantIndex })));
+  if (!check.ok) {
+    throw new Error(check.reason === 'ambiguous'
+      ? `That combination leaves ${check.count} possible codes, so something was entered wrong.`
+      : 'No code satisfies all of those at once, so something was entered wrong.');
+  }
+
+  return {
+    cardIds: slots.map((s) => s.cardId),
+    variants: slots.map((s) => s.variantIndex),
+    solution: check.solution,
+    redundant: check.redundant,
+    relaxed: check.redundant ? 'redundant' : null,
+    official: true,
+    symbol: symbols[0],
+  };
+}
+
+/*
+ * Parse a puzzle pasted straight off the turingmachine.info page. Selecting
+ * their table gives one value per line:
+ *
+ *     a          A  9  785        A,9,785
+ *     9    or    B  12 616   or   B,12,616
+ *     785        ...              ...
+ *
+ * Slot letters are ignored — position is what counts. Any line carrying a
+ * token that is neither a bare integer nor a single letter is dropped, which
+ * throws away the page's headings and the "#B52 N7N 6" puzzle id.
+ *
+ * Card numbers (1-48) and verification numbers (201-798) occupy disjoint
+ * ranges, so the two columns can be told apart and a reversed paste still
+ * reads correctly.
+ */
+const CARD_MIN = 1, CARD_MAX = 48;
+const VERIF_MIN = 201, VERIF_MAX = 798;
+
+function parseOfficialPaste(text) {
+  if (!text || !String(text).trim()) throw new Error('Paste the puzzle first.');
+
+  const numbers = [];
+  for (const line of String(text).split(/[\r\n]+/)) {
+    const tokens = line.split(/[\s,;|\t]+/).filter(Boolean);
+    if (!tokens.length) continue;
+    const clean = tokens.map((t) => t.replace(/[.:)#]+$/, '').replace(/^[.:(#]+/, ''));
+    if (!clean.every((t) => /^\d+$/.test(t) || /^[A-Za-z]$/.test(t))) continue;
+    for (const t of clean) if (/^\d+$/.test(t)) numbers.push(parseInt(t, 10));
+  }
+
+  if (numbers.length < 8) {
+    // People reach for the big heading first. It is a database row id, not an
+    // encoding — the puzzle simply is not in it.
+    var compact = String(text).replace(/[#\s]/g, '');
+    if (/^[A-Za-z]\d[A-Za-z0-9]{3,8}$/.test(compact)) {
+      throw new Error('That looks like the puzzle’s name (the “#B52 N7N 6” heading). ' +
+        'It’s just an id — the puzzle isn’t stored in it. Copy the two columns of ' +
+        'numbers underneath instead: the green criteria card number and the ' +
+        'verification number beside it, for each of A, B, C…');
+    }
+    throw new Error('We could only find ' + numbers.length + ' number' +
+      (numbers.length === 1 ? '' : 's') + ' in that. A puzzle needs a criteria card ' +
+      'number and a verification number for each of its 4 to 6 verifiers.');
+  }
+  if (numbers.length % 2 !== 0) {
+    throw new Error('That came to ' + numbers.length + ' numbers — an odd count, so one is ' +
+      'missing or one too many got picked up. Each verifier needs exactly two.');
+  }
+  if (numbers.length > 12) {
+    throw new Error('That came to ' + numbers.length + ' numbers, which is more than 6 ' +
+      'verifiers worth. Paste just the puzzle’s own table.');
+  }
+
+  const isCard = (n) => n >= CARD_MIN && n <= CARD_MAX;
+  const isVerif = (n) => n >= VERIF_MIN && n <= VERIF_MAX;
+
+  const pairs = [];
+  for (let i = 0; i < numbers.length; i += 2) {
+    const a = numbers[i], b = numbers[i + 1];
+    if (isCard(a) && isVerif(b)) pairs.push({ cardId: a, verification: b });
+    else if (isVerif(a) && isCard(b)) pairs.push({ cardId: b, verification: a });
+    else {
+      const slot = 'ABCDEF'[pairs.length] || String(pairs.length + 1);
+      throw new Error(`Couldn’t read ${slot}: “${a}” and “${b}” aren’t a criteria card ` +
+        `(${CARD_MIN}-${CARD_MAX}) paired with a verification card (${VERIF_MIN}-${VERIF_MAX}).`);
+    }
+  }
+  return pairs;
+}
+
+/* ---------- deduction / assist ---------- */
+
+/**
+ * Given the rounds played, which variants of each card are still possible?
+ * A variant is impossible when it disagrees with any answer the machine gave.
+ * results: [{ codeIndex, verifierSlot, answer(bool) }]
+ */
+function eliminatedVariants(deck, puzzle, results) {
+  const dead = puzzle.cardIds.map((id) => new Array(deck.get(id).verifiers.length).fill(false));
+  for (const r of results) {
+    const card = deck.get(puzzle.cardIds[r.verifierSlot]);
+    card.verifiers.forEach((v, vi) => {
+      if (maskGet(v.mask, r.codeIndex) !== (r.answer ? 1 : 0)) dead[r.verifierSlot][vi] = true;
+    });
+  }
+  return dead;
+}
+
+/**
+ * Every code that is still a possible answer, given the observed results.
+ * Considers only *legal* assignments (unique solution + no redundant card),
+ * exactly as a careful player would.
+ */
+function candidateSolutions(deck, puzzle, results, legalAssignments) {
+  const legal = legalAssignments || enumerateAssignments(deck, puzzle.cardIds,
+    { allowRedundant: !!puzzle.redundant }).assignments;
+  const cards = puzzle.cardIds.map((id) => deck.get(id));
+  const alive = new Set();
+  const survivors = [];
+  outer:
+  for (const a of legal) {
+    for (const r of results) {
+      const v = cards[r.verifierSlot].verifiers[a.variants[r.verifierSlot]];
+      if (maskGet(v.mask, r.codeIndex) !== (r.answer ? 1 : 0)) continue outer;
+    }
+    survivors.push(a);
+    alive.add(a.solutionIndex);
+  }
+  return {
+    codes: [...alive].sort((x, y) => x - y).map(codeFromIndex),
+    assignmentCount: survivors.length,
+  };
+}
+
+/**
+ * The candidate set after each answer in turn, so a player can replay how the
+ * field narrowed. Index 0 is before any test; index i+1 is after results[i].
+ *
+ * Filters the surviving assignments forward rather than re-filtering the whole
+ * legal set per step — answers only ever remove assignments, never restore
+ * them, so each step starts from the last one's survivors.
+ */
+function candidateTimeline(deck, puzzle, results, legalAssignments) {
+  const legal = legalAssignments || enumerateAssignments(deck, puzzle.cardIds,
+    { allowRedundant: !!puzzle.redundant }).assignments;
+  const cards = puzzle.cardIds.map((id) => deck.get(id));
+
+  const snapshot = (alive) => {
+    const seen = new Set();
+    for (const a of alive) seen.add(a.solutionIndex);
+    return {
+      codes: [...seen].sort((x, y) => x - y).map(codeFromIndex),
+      codeIndices: seen,
+      assignmentCount: alive.length,
+    };
+  };
+
+  let alive = legal;
+  const steps = [snapshot(alive)];
+  for (const r of results) {
+    const want = r.answer ? 1 : 0;
+    alive = alive.filter((a) =>
+      maskGet(cards[r.verifierSlot].verifiers[a.variants[r.verifierSlot]].mask, r.codeIndex) === want);
+    steps.push(snapshot(alive));
+  }
+  return steps;
+}
+
+/* ---------- exports ---------- */
+
+const ENGINE = {
+  N_CODES, ALL_CODES, codeIndex, codeFromIndex,
+  maskNew, maskSet, maskGet, maskFull, maskAnd, maskOr, maskCount, maskFirst, maskToIndices,
+  compileCriteria, validateDeck, MUTUALLY_EXCLUSIVE_UP_TO,
+  checkAssignment, enumerateAssignments, generatePuzzle, MIN_SPREAD,
+  generateColdPuzzle, coldness,
+  encodePuzzle, decodePuzzle, decodeOfficial, parseOfficialPaste,
+  eliminatedVariants, candidateSolutions, candidateTimeline,
+  mulberry32, shuffled,
+};
+
+if (typeof module !== 'undefined' && module.exports) module.exports = ENGINE;
+if (typeof window !== 'undefined') window.ENGINE = ENGINE;
+
+</script>
+<script>
+/* ==========================================================================
+   Icon language for the criteria cards.
+   Turns the token arrays in data/visuals.json into inline SVG + chips,
+   in the spirit of the printed cards: a shape per colour, numerals, signs.
+   ========================================================================== */
+
+(function () {
+  'use strict';
+
+  var SHAPES = {
+    blue:   '<path d="M11 2.2 19.6 18.4H2.4Z"/>',
+    yellow: '<rect x="2.8" y="2.8" width="16.4" height="16.4" rx="1.6"/>',
+    purple: '<circle cx="11" cy="11" r="8.6"/>'
+  };
+  var ORDER = ['blue', 'yellow', 'purple'];
+
+  function svg(inner, cls) {
+    return '<svg class="gl-svg ' + (cls || '') + '" viewBox="0 0 22 22" aria-hidden="true">' + inner + '</svg>';
+  }
+
+  function shape(colour) {
+    return '<span class="gl-shape gl-' + colour + '">' + svg(SHAPES[colour]) + '</span>';
+  }
+
+  /* "the others" — the remaining digits, whichever colours they turn out to be */
+  function others() {
+    return '<span class="gl-others" aria-hidden="true">' +
+      svg('<path d="M11 2.2 19.6 18.4H2.4Z"/>') +
+      svg('<rect x="2.8" y="2.8" width="16.4" height="16.4" rx="1.6"/>') +
+      svg('<circle cx="11" cy="11" r="8.6"/>') +
+      '</span>';
+  }
+
+  /* "a specific colour" — the three shapes offered as a choice */
+  function anyColour() {
+    return '<span class="gl-any">' + ORDER.map(shape).join('') + '</span>';
+  }
+
+  /* Separated bars mean ordering — 1 then 3 then 5 counts as ascending.
+     Blocks butted into a staircase mean a consecutive run — only 3,4,5 does.
+     The two must never look alike: they are different cards. */
+  function bars(n, dir, tight) {
+    var hs = dir === 'up' ? [7, 12, 17] : dir === 'down' ? [17, 12, 7] : [13, 7, 16];
+    var w = tight ? 6.2 : 4.6;
+    var step = tight ? 6.2 : 6.6;
+    var out = '';
+    for (var i = 0; i < n; i++) {
+      var h = hs[i];
+      // No separator between run blocks: they must fuse into one solid
+      // staircase. A hairline here survives magnification but not the 15px
+      // the options list actually renders at, leaving it a lookalike of the
+      // separated bars that mean something else entirely.
+      out += '<rect x="' + (2 + i * step) + '" y="' + (20 - h) + '" width="' + w + '" height="' + h +
+        '" rx="' + (tight ? 0 : 1) + '"/>';
+    }
+    if (tight) out += '<rect x="1.4" y="19.4" width="' + (1.2 + n * step) + '" height="1.6" rx=".8"/>';
+    return svg(out, 'gl-bars');
+  }
+
+  /* repeated digits, for pairs and triples */
+  function repeat(n) {
+    var out = '';
+    for (var i = 0; i < n; i++) out += '<circle cx="' + (4.5 + i * 6.5) + '" cy="11" r="3.1"/>';
+    return svg(out, 'gl-repeat');
+  }
+
+  var FIGURES = {
+    others: others,
+    anycolour: anyColour,
+    asc2: function () { return '<span class="gl-fig">' + bars(2, 'up') + '</span>'; },
+    asc3: function () { return '<span class="gl-fig">' + bars(3, 'up') + '</span>'; },
+    desc2: function () { return '<span class="gl-fig">' + bars(2, 'down') + '</span>'; },
+    desc3: function () { return '<span class="gl-fig">' + bars(3, 'down') + '</span>'; },
+    run2:  function () { return '<span class="gl-fig">' + bars(2, 'up', true) + '</span>'; },
+    run3:  function () { return '<span class="gl-fig">' + bars(3, 'up', true) + '</span>'; },
+    rund2: function () { return '<span class="gl-fig">' + bars(2, 'down', true) + '</span>'; },
+    rund3: function () { return '<span class="gl-fig">' + bars(3, 'down', true) + '</span>'; },
+    noorder: function () { return '<span class="gl-fig">' + bars(3, 'none') + '</span>'; },
+    double: function () { return '<span class="gl-fig">' + repeat(2) + '</span>'; },
+    triple: function () { return '<span class="gl-fig">' + repeat(3) + '</span>'; },
+    slash: function () {
+      return '<span class="gl-fig gl-none">' + svg(
+        '<circle cx="11" cy="11" r="8.4" fill="none" stroke="currentColor" stroke-width="2.2"/>' +
+        '<line x1="5" y1="17" x2="17" y2="5" stroke="currentColor" stroke-width="2.2"/>') + '</span>';
+    }
+  };
+
+  function token(t) {
+    if (t.s) return shape(t.s);
+    if (t.n !== undefined) return '<span class="gl-num">' + t.n + '</span>';
+    if (t.o) return '<span class="gl-op">' + escapeOp(t.o) + '</span>';
+    if (t.k === 'sum') return '<span class="gl-sum">&Sigma;</span>';
+    if (t.w) return '<span class="gl-word">' + t.w + '</span>';
+    if (t.g) return (FIGURES[t.g] || function () { return ''; })();
+    if (t.c !== undefined) {
+      return '<span class="gl-count"><span class="gl-times">' +
+        '&times;' + (t.c === '?' ? '?' : t.c) + '</span>' + token(t.of) + '</span>';
+    }
+    return '';
+  }
+
+  function escapeOp(o) {
+    return o === '<' ? '&lt;' : o === '>' ? '&gt;' : o;
+  }
+
+  /**
+   * render(tokens, size) -> HTML string.
+   * size: 'lg' for a card face, 'sm' for an option in the notes list.
+   */
+  function render(tokens, size) {
+    if (!tokens || !tokens.length) return '';
+    return '<span class="glyphs gl-' + (size || 'lg') + '" aria-hidden="true">' +
+      tokens.map(token).join('') + '</span>';
+  }
+
+  window.GLYPHS = { render: render };
+})();
+
+</script>
+<script>
+/* ==========================================================================
+   TURING MACHINE — interface
+   ========================================================================== */
+
+(function () {
+  'use strict';
+
+  var E = window.ENGINE;
+  var DECK = E.compileCriteria(window.CRITERIA);
+  var VERIF = window.VERIFICATION;
+  var VIS = window.VISUALS;
+  var art = function (tokens, size) {
+    return window.GLYPHS ? window.GLYPHS.render(tokens, size) : '';
+  };
+  var LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  var CHANNELS = [
+    { key: 'blue', name: 'Blue', shape: 'triangle' },
+    { key: 'yellow', name: 'Yellow', shape: 'square' },
+    { key: 'purple', name: 'Purple', shape: 'circle' }
+  ];
+
+  /* ---------------------------------------------------------------- state */
+
+  var S = {
+    screen: 'setup',
+    setup: {
+      mode: 'random', count: 5, chosen: [], designVariants: {},
+      /* One [criteria, verification] pair per verifier — five rows is what the
+         site prints most often. Typed values live here so they survive the
+         full re-render that follows every click. */
+      official: [['', ''], ['', ''], ['', ''], ['', ''], ['', '']],
+      coldLevel: 'gentle',
+      paste: '',
+      message: null, busy: false, joinCode: ''
+    },
+    puzzle: null,
+    shareCode: null,
+    rounds: [],
+    proposal: [1, 1, 1],
+    notes: {},            // slot -> { variantIndex: true }
+    openNotes: {},        // slot -> bool
+    assist: 'off',        // 'off' | 'cross' | 'solve'
+    pendingRound: false,  // stepped to a fresh round, not yet tested
+    finished: null,       // { win, code, rounds, attempt }
+    legal: null,          // cached legal assignments for assist
+    focusChannel: 0,
+    theme: (typeof document !== 'undefined' &&
+      document.documentElement.getAttribute('data-theme')) || 'light',
+    replayStep: null,    // which answer the replay is parked on
+    attempts: [],        // no-questions mode: codes tried, newest last
+    ask: null,           // pending in-app confirmation, see ask()
+    grid: {},            // worksheet: code index -> struck by hand
+    gridOpen: false,
+    coldMiss: null,      // no-questions mode: why the last guess was wrong
+    freshGame: true,
+    justTested: null,     // slot whose answer should stamp in
+    shownModal: null,     // which modal was on screen last render
+    noticeSeen: false,
+    toast: null
+  };
+
+  /* ------------------------------------------------------------- helpers */
+
+  function h(str) {
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function glyph(shape, cls) {
+    var fill = 'currentColor';
+    if (shape === 'triangle') return '<svg class="glyph ' + cls + '" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5 18.5 17.5H1.5Z" fill="' + fill + '"/></svg>';
+    if (shape === 'square') return '<svg class="glyph ' + cls + '" viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="2.5" width="15" height="15" fill="' + fill + '"/></svg>';
+    return '<svg class="glyph ' + cls + '" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="' + fill + '"/></svg>';
+  }
+
+  function codeHtml(code) {
+    return '<span class="log-code"><span class="b">' + code[0] + '</span> <span class="y">' + code[1] + '</span> <span class="p">' + code[2] + '</span></span>';
+  }
+
+  /* A round only exists once it has been tested — rounds are what you are
+     scored on, so we never create an empty one. `pendingRound` means the
+     player has stepped to a fresh round but not yet spent it. */
+  function isCold() { return !!(S.puzzle && S.puzzle.cold); }
+
+  /* Options lists start closed in normal play and open in No-questions mode,
+     where they are the whole working surface. Both defaults are "no entry yet",
+     so the toggle has to flip the state actually on screen — otherwise the
+     first click on an open-by-default list writes `true` and appears dead. */
+  function notesOpen(slot) {
+    var v = S.openNotes[slot];
+    return isCold() ? v !== false : !!v;
+  }
+
+  function currentRound() { return S.rounds.length ? S.rounds[S.rounds.length - 1] : null; }
+
+  function activeRound() { return S.pendingRound ? null : currentRound(); }
+
+  function testsThisRound() {
+    var r = activeRound();
+    return r ? r.tests.length : 0;
+  }
+
+  function roundLocked() {
+    var r = activeRound();
+    return !!(r && r.tests.length);
+  }
+
+  /* Every answer in the order it was given, carrying the round and proposal
+     that produced it — the log needs that to caption the replay. */
+  function resultTrail() {
+    var out = [];
+    S.rounds.forEach(function (r, ri) {
+      r.tests.forEach(function (t) {
+        out.push({
+          codeIndex: E.codeIndex(r.code[0], r.code[1], r.code[2]),
+          verifierSlot: t.slot,
+          answer: t.answer,
+          round: ri + 1,
+          final: !!r.final,
+          code: r.code
+        });
+      });
+    });
+    return out;
+  }
+
+  function allResults() {
+    var out = [];
+    S.rounds.forEach(function (r) {
+      r.tests.forEach(function (t) {
+        out.push({ codeIndex: E.codeIndex(r.code[0], r.code[1], r.code[2]), verifierSlot: t.slot, answer: t.answer });
+      });
+    });
+    return out;
+  }
+
+  /*
+   * Ask before doing something that cannot be undone.
+   *
+   * Deliberately not window.confirm: published as an artifact this page runs
+   * inside a sandboxed frame, where confirm() is ignored and returns false —
+   * so the action silently never happened and the button looked broken. An
+   * in-app dialog also matches the rest of the interface.
+   */
+  function ask(spec) {
+    S.ask = spec;
+    S.modal = 'ask';
+    render();
+  }
+
+  function toast(msg) {
+    S.toast = msg;
+    render();
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { S.toast = null; render(); }, 2200);
+  }
+
+  /* --------------------------------------------------------- persistence */
+
+  var LAST_KEY = 'turing:v1:last';
+
+  function storeKey() { return 'turing:v1:' + S.shareCode; }
+
+  function save() {
+    if (!S.shareCode) return;
+    try {
+      localStorage.setItem(storeKey(), JSON.stringify({
+        rounds: S.rounds, notes: S.notes, assist: S.assist, pendingRound: S.pendingRound,
+        attempts: S.attempts, grid: S.grid, gridOpen: S.gridOpen, coldMiss: S.coldMiss,
+        finished: S.finished, proposal: S.proposal, openNotes: S.openNotes
+      }));
+    } catch (e) { /* private browsing — play on without saving */ }
+  }
+
+  function restore() {
+    try {
+      var raw = localStorage.getItem(storeKey());
+      if (!raw) return false;
+      var d = JSON.parse(raw);
+      S.rounds = d.rounds || [];
+      S.notes = d.notes || {};
+      S.assist = d.assist || 'off';
+      S.finished = d.finished || null;
+      S.proposal = d.proposal || [1, 1, 1];
+      S.openNotes = d.openNotes || {};
+      S.pendingRound = !!d.pendingRound;
+      S.attempts = d.attempts || [];
+      S.grid = d.grid || {};
+      S.gridOpen = !!d.gridOpen;
+      S.coldMiss = d.coldMiss || null;
+      return true;
+    } catch (e) { return false; }
+  }
+
+  /* -------------------------------------------------------------- assist */
+
+  function ensureLegal() {
+    if (S.legal) return S.legal;
+    try {
+      S.legal = E.enumerateAssignments(DECK, S.puzzle.cardIds,
+        { allowRedundant: !!S.puzzle.redundant }).assignments;
+    } catch (e) { S.legal = []; }
+    return S.legal;
+  }
+
+  function autoStruck() {
+    if (S.assist === 'off' && !S.finished) return null;
+    return E.eliminatedVariants(DECK, S.puzzle, allResults());
+  }
+
+  /* ================================================================ SETUP */
+
+  function viewSetup() {
+    var st = S.setup;
+    var out = '<div class="setup">';
+
+    out += '<section class="hero">' +
+      '<h2>Everyone owns the box. Now everyone can share the table.</h2>' +
+      '<p>Build a Turing Machine puzzle from the criteria cards you have in front of you, then send the code to your friends. ' +
+      'They open the same link, get the same machine, and you can all work the deduction together over the call.</p>' +
+      '</section>';
+
+    out += '<div class="setup-grid">';
+
+    /* ---- build ---- */
+    out += '<section class="panel"><div class="panel-head"><h3 class="panel-title">Build a machine</h3></div><div class="panel-body">';
+
+    out += '<div class="field"><label>Setup</label><div class="seg" role="group">' +
+      seg('random', 'Random cards', st.mode) +
+      seg('choose', 'Pick cards', st.mode) +
+      seg('official', 'Official puzzle', st.mode) +
+      seg('cold', 'No questions', st.mode) +
+      seg('design', 'Designer', st.mode) +
+      '</div></div>';
+
+    if (st.mode === 'cold') {
+      out += '<p class="hint" style="margin-top:0">A variant. The app deals a set of criteria ' +
+        'cards for which <em>exactly one</em> way of setting them gives a single answer with ' +
+        'every card doing real work. That is enough to pin the code down — so there is nothing ' +
+        'to ask the machine. You reason it out from the card list alone.</p>';
+      out += '<div class="field"><label>Difficulty</label><div class="seg" role="group">' +
+        [['gentle', 'Gentle'], ['standard', 'Standard'], ['tough', 'Tough']].map(function (o) {
+          return '<button type="button" data-action="cold-level" data-v="' + o[0] + '" aria-pressed="' +
+            (st.coldLevel === o[0]) + '">' + o[1] + '</button>';
+        }).join('') + '</div></div>';
+
+      out += '<p class="hint" style="font-size:13px">' + (
+        st.coldLevel === 'gentle'
+          ? 'Only cards <b>1&ndash;25</b>, where each card\'s options are mutually exclusive — ' +
+            'if one holds, the rest cannot. That is the reasoning most people find natural, and ' +
+            'it keeps the number of settings you have to rule out down to a dozen or so.'
+        : st.coldLevel === 'tough'
+          ? 'At least three cards from <b>26&ndash;48</b>, where a card offers a <em>menu</em> of ' +
+            'separate criteria and several can be true of one code at once. Expect a few hundred ' +
+            'settings to work through.'
+          : 'Any card. Usually a couple from 26&ndash;48, where several options can be true of the ' +
+            'same code at once — the step most people find fiddly.') + '</p>';
+
+      out += '<div class="field"><label>How many cards</label><div class="seg" role="group">' +
+        [4, 5, 6].map(function (n) {
+          return '<button type="button" data-action="count" data-n="' + n + '" aria-pressed="' +
+            (st.count === n) + '">' + n + ' cards</button>';
+        }).join('') + '</div></div>';
+      out += '<p class="hint" style="font-size:13px">Fewer cards is not simpler here — with four, ' +
+        'each one carries more of the work.</p>';
+    } else if (st.mode === 'official') {
+      out += '<p class="hint" style="margin-top:0">Copy a puzzle straight off ' +
+        '<b>turingmachine.info</b> — the Daily Challenge, or any puzzle it generates. ' +
+        'Enter both columns: the green <em>criteria card</em> number and the blue ' +
+        '<em>verification card</em> number beside it. That second number is the secret half, ' +
+        'so the app reproduces the exact puzzle the site set.</p>';
+
+      out += '<div class="paste-box"><div class="field" style="margin-bottom:0">' +
+        '<label>Paste it in</label>' +
+        '<textarea class="input" data-action="paste-in" rows="5" spellcheck="false" ' +
+        'placeholder="a&#10;9&#10;785&#10;b&#10;12&#10;616&#10;&#8230;">' + h(st.paste) + '</textarea>' +
+        '</div><div class="paste-actions">' +
+        '<button class="btn btn-sm" data-action="read-paste">Read it in</button>' +
+        '<span class="hint" style="font-size:12.5px">Select the table on the site and paste — ' +
+        'headings and the puzzle number are ignored.</span>' +
+        '</div></div>';
+
+      out += '<div class="official-grid"><div class="official-head">' +
+        '<span></span><span>Criteria card</span><span>Verification card</span><span></span></div>' +
+        st.official.map(function (row, i) {
+          return '<div class="official-row">' +
+            '<span class="official-letter">' + LETTERS[i] + '</span>' +
+            '<input class="input" inputmode="numeric" data-action="official-in" data-i="' + i + '" data-k="0"' +
+              ' value="' + h(row[0]) + '" placeholder="1-48" autocomplete="off">' +
+            '<input class="input" inputmode="numeric" data-action="official-in" data-i="' + i + '" data-k="1"' +
+              ' value="' + h(row[1]) + '" placeholder="201-798" autocomplete="off">' +
+            (st.official.length > 4
+              ? '<button class="official-drop" data-action="official-row" data-d="-1" data-i="' + i + '"' +
+                ' aria-label="Remove verifier ' + LETTERS[i] + '">&times;</button>'
+              : '<span></span>') +
+            '</div>';
+        }).join('') + '</div>';
+
+      if (st.official.length < 6) {
+        out += '<button class="btn btn-sm btn-ghost" style="margin-top:10px" ' +
+          'data-action="official-row" data-d="1">+ Add a verifier</button>';
+      }
+      out += '<p class="hint" style="margin-top:14px;font-size:13px">Nobody has to look anything up ' +
+        'in the box, and reading these numbers out loud spoils nothing — they mean nothing without ' +
+        'the lookup table, which is built in here. The <em>#B52 N7N 6</em> heading is only the ' +
+        'puzzle’s name, so it isn’t enough on its own.</p>';
+    } else if (st.mode === 'random') {
+      out += '<div class="field"><label>How many verifiers</label><div class="seg" role="group">' +
+        [4, 5, 6].map(function (n) {
+          return '<button type="button" data-action="count" data-n="' + n + '" aria-pressed="' + (st.count === n) + '">' + n + ' cards</button>';
+        }).join('') + '</div></div>';
+      out += '<p class="hint">Four is a gentle warm-up; six is a proper afternoon. The app deals criteria cards at random and secretly sets each one, guaranteeing a single answer with <em>no redundant card</em> — same standard as the puzzle book.</p>';
+    } else {
+      out += '<div class="field"><label>Criteria cards ' +
+        '<span style="float:right;color:var(--brand-deep)">' + st.chosen.length + ' selected</span></label>' +
+        '<div class="card-picker">' +
+        DECK.cards.map(function (c) {
+          var on = st.chosen.indexOf(c.id) !== -1;
+          return '<button type="button" class="card-chip" data-action="pick-card" data-id="' + c.id + '" ' +
+            'aria-pressed="' + on + '" title="' + h(c.description || c.title) + '">' + c.id + '</button>';
+        }).join('') +
+        '</div></div>';
+
+      if (st.chosen.length) {
+        out += '<div class="field"><label>Selected</label><div class="hint" style="font-family:var(--font-num);font-size:12.5px">' +
+          st.chosen.map(function (id) {
+            return '<div style="padding:3px 0"><b style="color:var(--brand-deep)">#' + id + '</b> — ' + h(DECK.get(id).title) + '</div>';
+          }).join('') + '</div></div>';
+      }
+
+      if (st.mode === 'design') {
+        out += '<p class="hint">Designer mode lets you set each card yourself — use it to rebuild a puzzle you already know the answer to. <em>Only open this if you are not the one solving.</em></p>';
+        st.chosen.forEach(function (id, i) {
+          var card = DECK.get(id);
+          out += '<div class="field"><label>' + LETTERS[i] + ' — card ' + id + '</label>' +
+            '<select class="input" data-action="design-variant" data-slot="' + i + '">' +
+            card.verifiers.map(function (v, vi) {
+              var sel = (st.designVariants[id] || 0) === vi ? ' selected' : '';
+              return '<option value="' + vi + '"' + sel + '>' + h(v.text) + '</option>';
+            }).join('') + '</select></div>';
+        });
+      } else {
+        out += '<p class="hint">Pick 4–6 card numbers straight off the cards in your box. The app secretly chooses which option each one is set to, so nobody — including you — knows the answer.</p>';
+      }
+    }
+
+    if (st.message) {
+      out += '<div class="status-line' + (st.message.bad ? ' bad' : '') + '">' + h(st.message.text) + '</div>';
+    }
+
+    out += '<div style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-primary" data-action="generate"' + (st.busy ? ' disabled' : '') + '>' +
+      (st.busy ? 'Building…' : 'Start the machine') + '</button>' +
+      (st.mode === 'official' ? '<button class="btn btn-ghost" data-action="clear-official">Clear</button>' :
+        (st.mode !== 'random' && st.chosen.length ? '<button class="btn btn-ghost" data-action="clear-cards">Clear</button>' : '')) +
+      '</div>';
+
+    out += '</div></section>';
+
+    /* ---- join ---- */
+    out += '<section class="panel"><div class="panel-head"><h3 class="panel-title">Join a machine</h3></div><div class="panel-body">' +
+      '<div class="field"><label>Puzzle code</label>' +
+      '<input class="input code-input" id="join-code" placeholder="XXXXX-XXXXX-XXXX" autocomplete="off" spellcheck="false" value="' + h(st.joinCode || '') + '"></div>' +
+      '<button class="btn btn-primary" data-action="join">Load puzzle</button>' +
+      (S.setup.joinError ? '<div class="status-line bad">' + h(S.setup.joinError) + '</div>' : '') +
+      '<div class="tape" style="margin:20px -18px"></div>' +
+      '<p class="hint">Paste the code a friend read out, or just open the link they sent. Everyone gets the same cards, the same hidden settings and the same answer — you each keep your own notes.</p>' +
+      '<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">' +
+      '<button class="btn btn-sm btn-ghost" data-action="rules">How it plays</button>' +
+      '<button class="btn btn-sm btn-ghost" data-action="index">Card index</button>' +
+      '</div>' +
+      '</div></section>';
+
+    out += '</div></div>';
+    return out;
+  }
+
+  function seg(mode, label, active) {
+    return '<button type="button" data-action="mode" data-mode="' + mode + '" aria-pressed="' + (active === mode) + '">' + label + '</button>';
+  }
+
+  /* ================================================================= GAME */
+
+  function viewGame() {
+    var out = '<div class="game">';
+    out += viewStrip();
+    if (S.puzzle.relaxed === 'redundant') {
+      out += '<div class="status-line" style="margin:0">Heads up: with these particular cards, no setting made every ' +
+        'card matter — so one verifier here is redundant, and the answer can be found without it. ' +
+        'Don’t lean on the “every card must count” rule for this one.</div>';
+    }
+    out += '<section class="rack">' + S.puzzle.cardIds.map(viewVerifier).join('') + '</section>';
+    out += '<div class="lower">' + viewConsole() + (isCold() ? viewCold() : viewLog()) + '</div>';
+    if (isCold()) out += viewWorksheet();
+    out += '</div>';
+    return out;
+  }
+
+  /* How many options are still standing across the whole rack, counting only
+     the ones the player has not crossed off. Their own pencil work — it gives
+     nothing away. */
+  function optionsLeft() {
+    var live = 0, total = 0;
+    S.puzzle.cardIds.forEach(function (id, slot) {
+      var struck = S.notes[slot] || {};
+      DECK.get(id).verifiers.forEach(function (v, vi) {
+        total++;
+        if (!struck[vi]) live++;
+      });
+    });
+    return live + ' / ' + total;
+  }
+
+  function viewStrip() {
+    var used = S.rounds.length;
+    return '<dl class="strip">' +
+      (isCold()
+        ? '<div class="strip-cell"><dt>Guesses</dt><dd>' + S.attempts.length + '</dd></div>'
+        : '<div class="strip-cell"><dt>Rounds used</dt><dd>' + used + '</dd></div>') +
+      '<div class="strip-cell"><dt>Verifiers</dt><dd>' + S.puzzle.cardIds.length + '</dd></div>' +
+      (S.finished
+        ? '<div class="strip-cell"><dt>Result</dt><dd style="color:' +
+          (S.finished.win ? 'var(--brand-deep)' : 'var(--fail)') + '">' +
+          (S.finished.win ? 'Solved' : 'Missed') + '</dd></div>'
+        : isCold()
+          /* There are no tests to count here. What a player is actually
+             whittling down is the options, so count those instead. */
+          ? '<div class="strip-cell"><dt>Options left</dt><dd>' + optionsLeft() + '</dd></div>'
+          : '<div class="strip-cell"><dt>Tests this round</dt><dd>' + testsThisRound() + ' / 3</dd></div>') +
+      '<div class="strip-cell wide"><dt>' +
+        (S.puzzle.official ? 'Puzzle code &middot; imported puzzle' : 'Puzzle code') +
+        '</dt><dd>' + h(S.shareCode) + '</dd></div>' +
+      '</dl>';
+  }
+
+  function viewVerifier(cardId, slot) {
+    var card = DECK.get(cardId);
+    var round = activeRound();
+    var test = round ? round.tests.filter(function (t) { return t.slot === slot; })[0] : null;
+    var auto = autoStruck();
+    var open = notesOpen(slot);
+    var struck = S.notes[slot] || {};
+    var done = S.finished;
+
+    var cls = 'verifier';
+    if (test) cls += test.answer ? ' is-yes' : ' is-no';
+    if (done) cls += ' is-solved';
+    if (S.freshGame) cls += ' stagger';
+
+    var remaining = card.verifiers.filter(function (v, vi) {
+      return !struck[vi] && !(auto && auto[slot][vi]);
+    }).length;
+
+    var out = '<article class="' + cls + '" style="animation-delay:' + (slot * 70) + 'ms">';
+    out += '<div class="verifier-top">' +
+      '<div class="verifier-letter">' + LETTERS[slot] + '</div>' +
+      '<div class="verifier-no">card<b>' + cardId + '</b></div>' +
+      '<div class="lamp ' + (test ? (test.answer ? 'yes' : 'no') : '') + '"></div>' +
+      '</div>';
+
+    out += '<div class="verifier-art">' + art(VIS.cards[cardId], 'lg') + '</div>';
+    out += '<div class="verifier-question">' + h(card.description || card.title) + '</div>';
+
+    out += '<div class="verifier-foot">';
+    if (isCold()) {
+      /* nothing to ask — the options list is the whole working surface */
+    } else if (done) {
+      out += '<div class="test-result revealed">Revealed below</div>';
+    } else if (test) {
+      out += '<div class="test-result ' + (test.answer ? 'yes' : 'no') +
+        (S.justTested === slot ? ' fresh' : '') + '">' +
+        (test.answer ? '&#10003; passes' : '&#10007; fails') + '</div>';
+    } else {
+      var full = round && round.tests.length >= 3;
+      out += '<button class="btn btn-sm test-btn" data-action="test" data-slot="' + slot + '"' +
+        (full ? ' disabled title="Three tests already used this round"' : '') + '>Test ' + LETTERS[slot] + '</button>';
+    }
+
+    out += '<button class="notes-toggle" data-action="notes" data-slot="' + slot + '">' +
+      '<span>' + (open ? '&#9662; options' : '&#9656; options') + '</span>' +
+      '<span class="count">' + remaining + '/' + card.verifiers.length + '</span></button>';
+
+    if (open) {
+      var slotCard = cardId;
+      out += '<div class="variants">' + card.verifiers.map(function (v, vi) {
+        var c = 'variant';
+        if (done && S.puzzle.variants[slot] === vi) c += ' revealed';
+        else if (struck[vi]) c += ' struck';
+        else if (auto && auto[slot][vi]) c += ' auto-struck';
+        var mark = (done && S.puzzle.variants[slot] === vi) ? '&#10003;'
+          : (struck[vi] ? '&#10007;' : (auto && auto[slot][vi] ? '&#8722;' : ''));
+        return '<button class="' + c + '" data-action="strike" data-slot="' + slot + '" data-vi="' + vi + '">' +
+          '<span class="mark">' + mark + '</span><span class="variant-body">' +
+          '<span>' + h(v.text) + '</span>' + art(VIS.options[slotCard][vi], 'sm') + '</span></button>';
+      }).join('') + '</div>';
+    }
+
+    out += '</div></article>';
+    return out;
+  }
+
+  function viewConsole() {
+    var locked = isCold() ? !!S.finished : (roundLocked() || !!S.finished);
+    var used = testsThisRound();
+
+    var out = '<section class="panel"><div class="panel-head"><h3 class="panel-title">' +
+      (isCold() ? 'Your answer' : 'Proposal') + '</h3>' +
+      (isCold() ? '' : '<div class="tests-left">' + [0, 1, 2].map(function (i) {
+        return '<span class="pip' + (i < used ? ' used' : '') + '"></span>';
+      }).join('') + '<span>tests</span></div>') + '</div><div class="panel-body">';
+
+    out += '<div class="proposal-readout">' + CHANNELS.map(function (ch, i) {
+      return '<div class="readout-digit ' + ch.key + '">' + glyph(ch.shape, ch.key) +
+        '<span class="num">' + S.proposal[i] + '</span></div>';
+    }).join('') + '</div>';
+
+    out += '<div class="dials">' + CHANNELS.map(function (ch, i) {
+      return '<div class="dial-row ' + ch.key + '">' +
+        '<div class="dial-label">' + glyph(ch.shape, ch.key) + '<span>' + ch.name + '</span></div>' +
+        '<div class="dial-keys">' + [1, 2, 3, 4, 5].map(function (n) {
+          return '<button class="key" data-action="dial" data-ch="' + i + '" data-n="' + n + '"' +
+            ' aria-pressed="' + (S.proposal[i] === n) + '"' + (locked ? ' disabled' : '') +
+            ' aria-label="' + ch.name + ' ' + n + '">' + n + '</button>';
+        }).join('') + '</div></div>';
+    }).join('') + '</div>';
+
+    out += '<div class="console-actions">';
+    if (isCold()) {
+      /* No tests to spend and no rounds to end, so this panel offers exactly one
+         button — no "Announce answer" alongside it. */
+      if (S.finished) {
+        out += '<button class="btn btn-primary" data-action="reveal">See the solution sheet</button>';
+      } else {
+        out += '<button class="btn btn-primary" data-action="announce">Submit this code</button>';
+        out += '<p class="hint" style="font-size:13px">No testing in this mode. When the card ' +
+          'list leaves only one possible code, enter it.</p>';
+      }
+      out += '</div></div></section>';
+      return out;
+    }
+    if (S.finished) {
+      out += '<button class="btn btn-primary" data-action="reveal">See the solution sheet</button>';
+    } else if (locked) {
+      out += '<button class="btn btn-primary" data-action="next-round">Next round &rarr;</button>';
+      out += '<p class="hint" style="font-size:13px">You have tested this proposal. Start a new round to change the dials — that is what costs you.</p>';
+    } else {
+      out += '<p class="hint" style="font-size:13px">Set the three dials, then test the proposal against up to three verifiers. Changing the dials is free until you test.</p>';
+    }
+    out += '<div class="row"><button class="btn" data-action="announce"' + (S.finished ? ' disabled' : '') + '>Announce answer</button></div>';
+    out += '</div>';
+
+    out += '</div></section>';
+    return out;
+  }
+
+  /*
+   * A scratchpad of all 125 codes. This mode withholds the candidate assist on
+   * purpose — it would print the answer — so the crossing-off has to be the
+   * player's own work. Grouped into five blocks by the blue digit, which is
+   * how you scan them once a criterion pins blue down.
+   */
+  function viewWorksheet() {
+    var struck = 0;
+    for (var k in S.grid) if (S.grid[k]) struck++;
+
+    var out = '<section class="panel worksheet">' +
+      '<button class="worksheet-head" data-action="grid-toggle" aria-expanded="' + S.gridOpen + '">' +
+      '<span class="panel-title">Worksheet</span>' +
+      '<span class="worksheet-meta"><b>' + (125 - struck) + '</b> of 125 left' +
+      '<span class="worksheet-caret">' + (S.gridOpen ? '&#9662;' : '&#9656;') + '</span></span>' +
+      '</button>';
+
+    if (!S.gridOpen) return out + '</section>';
+
+    out += '<div class="panel-body">' +
+      '<p class="hint" style="margin:0 0 14px">Cross off codes as your reasoning rules them ' +
+      'out. Nothing here is filled in or checked for you — it is a pencil, not a hint.</p>' +
+      '<div class="worksheet-grid">';
+
+    for (var b = 1; b <= 5; b++) {
+      out += '<div class="ws-block"><div class="ws-head">' + glyph('triangle', 'blue') +
+        '<span>blue ' + b + '</span></div><div class="ws-cells">';
+      for (var y = 1; y <= 5; y++) {
+        for (var p = 1; p <= 5; p++) {
+          var i = E.codeIndex(b, y, p);
+          out += '<button class="ws-cell' + (S.grid[i] ? ' off' : '') +
+            '" data-action="grid-mark" data-i="' + i + '" ' +
+            'aria-pressed="' + (!!S.grid[i]) + '" aria-label="blue ' + b + ', yellow ' + y +
+            ', purple ' + p + '">' +
+            '<span class="b">' + b + '</span><span class="y">' + y + '</span>' +
+            '<span class="p">' + p + '</span></button>';
+        }
+      }
+      out += '</div></div>';
+    }
+    out += '</div>';
+
+    if (struck) {
+      out += '<div style="margin-top:14px"><button class="btn btn-sm btn-ghost" ' +
+        'data-action="grid-clear">Rub out ' + (struck === 1 ? 'the one mark' :
+          'all ' + struck + ' marks') + '</button></div>';
+    }
+    return out + '</div></section>';
+  }
+
+  /* Derived from the cards, like coldness itself — so a shared puzzle shows
+     the same label to whoever opens it. */
+  function coldTier(pz) {
+    var menus = pz.cardIds.filter(function (id) { return id > 25; }).length;
+    if (!menus && pz.searchSpace <= 220 && (pz.survivors || 0) <= 20) return 'Gentle';
+    if (menus >= 3 || pz.searchSpace >= 800) return 'Tough';
+    return 'Standard';
+  }
+
+  function viewCold() {
+    var pz = S.puzzle;
+    var out = '<section class="panel"><div class="panel-head">' +
+      '<h3 class="panel-title">No questions &middot; ' + coldTier(pz) + '</h3>' +
+      '<button class="btn btn-sm btn-ghost" data-action="rules">Rules</button></div>' +
+      '<div class="panel-body">';
+
+    out += '<p class="hint" style="margin-top:0">Two rules hold for every Turing Machine ' +
+      'puzzle, and here they are all you get:</p>' +
+      '<ol class="cold-rules">' +
+      '<li>Exactly <b>one</b> of the 125 codes satisfies every verifier.</li>' +
+      '<li>No verifier is idle — drop any one of them and the answer stops being unique.</li>' +
+      '</ol>' +
+      /* Dealt puzzles always have a single legal setting, but this mode is
+         entered by *derivation* — a hand-picked or shared set can answer itself
+         while still allowing several settings. Claiming "exactly one way" there
+         sends the player hunting for something that is not there, so say which
+         case they are actually in. */
+      (pz.ways > 1
+        ? '<p class="hint">For these ' + pz.cardIds.length + ' cards there are <b>' + pz.ways +
+          '</b> ways to set them that satisfy both — but every one of them points at the ' +
+          '<b>same code</b>. So the settings stay ambiguous and the code does not. Cross ' +
+          'options off the lists above as you rule them out.</p>'
+        : '<p class="hint">For these ' + pz.cardIds.length + ' cards there is <b>exactly one</b> way ' +
+          'to set them that satisfies both. Find it, and the code falls out. Cross options off the ' +
+          'lists above as you rule them out.</p>');
+
+    /* Two different spaces, and they are easy to confuse: the 125 codes are
+       the answers, while a "setting" is which option each card is secretly on.
+       Show the multiplication so the second number explains itself. */
+    var counts = pz.cardIds.map(function (id) { return DECK.get(id).verifiers.length; });
+    out += '<div class="cold-facts">' +
+      '<div><dt>Ways the cards could be set</dt><dd>' + (pz.searchSpace || 0).toLocaleString() + '</dd></div>' +
+      '<div><dt>Of those, legal puzzles</dt><dd>' + (pz.ways || 1) + '</dd></div>' +
+      '</div>' +
+      '<p class="hint" style="font-size:12.5px;margin:8px 0 0">Each card is secretly set to ' +
+      'one of its printed options, so the cards can be set ' + counts.join(' &times; ') + ' = <b>' +
+      (pz.searchSpace || 0).toLocaleString() + '</b> ways. That is not the same as the ' +
+      '<b>125</b> possible codes — every legal setting picks out exactly one of those. ' +
+      (pz.ways > 1
+        ? 'Only ' + pz.ways + ' of the ' + (pz.searchSpace || 0).toLocaleString() +
+          ' settings are legal, and they all point at the same code.'
+        : 'Exactly one of the ' + (pz.searchSpace || 0).toLocaleString() +
+          ' settings is legal — find it and you have the code.') +
+      '</p>';
+
+    if (S.attempts.length) {
+      out += '<div class="field" style="margin-top:18px"><label>Codes you have tried</label>' +
+        '<div class="tried">' + S.attempts.map(function (a) {
+          return '<span class="candidate' + (a.win ? '' : ' out') + '">' + codeHtml(a.code) + '</span>';
+        }).join('') + '</div></div>';
+    }
+
+    if (S.finished && S.finished.gaveUp) {
+      out += '<div class="status-line">You asked to see it — the settings are marked on the cards above.</div>';
+    } else if (S.coldMiss) {
+      out += '<div class="status-line bad">' + h(S.coldMiss) + '</div>';
+    }
+
+    if (!S.finished) {
+      out += '<div style="margin-top:18px">' +
+        '<button class="btn btn-sm btn-ghost" data-action="give-up">Show me the answer</button></div>';
+    }
+
+    return out + '</div></section>';
+  }
+
+  function viewLog() {
+    var n = S.puzzle.cardIds.length;
+    var out = '<section class="panel"><div class="panel-head"><h3 class="panel-title">Logbook</h3>' +
+      '<button class="btn btn-sm btn-ghost" data-action="rules">Rules</button></div>';
+
+    if (!S.rounds.length) {
+      out += '<div class="empty-note">No rounds yet. The machine is warm and waiting.</div>';
+    } else {
+      out += '<div style="overflow-x:auto"><table class="log-table"><thead><tr>' +
+        '<th>Round</th><th>Proposal</th>' +
+        S.puzzle.cardIds.map(function (id, i) { return '<th>' + LETTERS[i] + '</th>'; }).join('') +
+        '</tr></thead><tbody>';
+      S.rounds.forEach(function (r, ri) {
+        var isCurrent = ri === S.rounds.length - 1 && !S.finished;
+        out += '<tr' + (isCurrent ? ' class="current"' : '') + '>' +
+          '<td class="log-round">' + (r.final ? 'final' : String(ri + 1).padStart(2, '0')) + '</td>' +
+          '<td>' + codeHtml(r.code) + '</td>';
+        for (var i = 0; i < n; i++) {
+          var t = r.tests.filter(function (x) { return x.slot === i; })[0];
+          out += '<td>' + (t ? (t.answer ? '<span class="log-yes">&#10003;</span>' : '<span class="log-no">&#10007;</span>') : '<span class="log-empty">·</span>') + '</td>';
+        }
+        out += '</tr>';
+      });
+      out += '</tbody></table></div>';
+    }
+
+    out += '<div class="assist-bar"><span class="label">Assist</span><div class="seg" role="group">' +
+      [['off', 'Off'], ['cross', 'Cross out'], ['solve', 'Show candidates']].map(function (o) {
+        return '<button type="button" data-action="assist" data-v="' + o[0] + '" aria-pressed="' + (S.assist === o[0]) + '">' + o[1] + '</button>';
+      }).join('') + '</div></div>';
+
+    if (S.assist === 'cross') {
+      out += '<p class="hint" style="padding:0 18px 14px;font-size:13px">Options that contradict an answer you have already received are crossed out for you. Open a verifier’s <em>options</em> list to see them.</p>';
+    }
+
+    if (S.assist === 'solve') out += viewReplay();
+
+    out += '</section>';
+    return out;
+  }
+
+  /* Scrub back through the answers and watch the field narrow. */
+  function viewReplay() {
+    var trail = resultTrail();
+    var steps = E.candidateTimeline(DECK, S.puzzle, trail, ensureLegal());
+    var at = S.replayStep;
+    if (at === null || at === undefined || at > steps.length - 1) at = steps.length - 1;
+
+    var here = steps[at];
+    var prev = at > 0 ? steps[at - 1] : null;
+    var ev = at > 0 ? trail[at - 1] : null;
+
+    var out = '<div class="replay">';
+
+    /* The start chip shows even on an untouched board — it is where the replay
+       begins, and seeing it there says the track will grow as answers land. */
+    out += '<div class="replay-track">' +
+        '<button class="replay-step' + (at === 0 ? ' on' : '') + '" data-action="replay" data-i="0">' +
+        '<span class="rs-label">start</span><span class="rs-n">' + steps[0].codes.length + '</span></button>' +
+        trail.map(function (t, i) {
+          var st = steps[i + 1];
+          var gone = steps[i].codes.length - st.codes.length;
+          return '<button class="replay-step' + (at === i + 1 ? ' on' : '') +
+            (t.answer ? ' yes' : ' no') + '" data-action="replay" data-i="' + (i + 1) + '" ' +
+            'title="Round ' + t.round + ', ' + t.code.join(' ') + ' → verifier ' + LETTERS[t.verifierSlot] +
+            (gone ? ', ruled out ' + gone : ', ruled out nothing') + '">' +
+            '<span class="rs-label">' + (t.final ? 'end' : t.round) + '&middot;' + LETTERS[t.verifierSlot] +
+            (t.answer ? ' &#10003;' : ' &#10007;') + '</span>' +
+            '<span class="rs-n">' + st.codes.length + '</span></button>';
+        }).join('') + '</div>';
+
+    out += '<p class="replay-say">' + (ev
+      ? 'Round ' + ev.round + ' &middot; you put ' + codeHtml(ev.code) + ' to verifier <b>' +
+        LETTERS[ev.verifierSlot] + '</b> (card ' + S.puzzle.cardIds[ev.verifierSlot] + '), which said <b class="' +
+        (ev.answer ? 'log-yes">&#10003; yes' : 'log-no">&#10007; no') + '</b>. ' +
+        (prev.codes.length - here.codes.length
+          ? 'That ruled out <b>' + (prev.codes.length - here.codes.length) + '</b> of ' + prev.codes.length + '.'
+          : 'That ruled out nothing you did not already know.')
+      : trail.length
+        ? 'Before any answers, with these card numbers alone.'
+        : 'Nothing tested yet — these are the codes the card numbers alone allow.') + '</p>';
+
+    out += '<div class="candidates">';
+    if (!here.codes.length) {
+      out += '<span class="hint">No code fits those answers — check the log.</span>';
+    } else {
+      out += here.codes.map(function (code) {
+        return '<span class="candidate">' + codeHtml(code) + '</span>';
+      }).join('');
+      if (prev) {
+        var live = {};
+        here.codes.forEach(function (c) { live[c.join('')] = 1; });
+        out += prev.codes.filter(function (c) { return !live[c.join('')]; }).map(function (code) {
+          return '<span class="candidate out">' + codeHtml(code) + '</span>';
+        }).join('');
+      }
+    }
+    out += '</div>';
+
+    out += '<p class="hint" style="padding:8px 20px 16px;font-size:13px">' +
+      here.codes.length + ' code' + (here.codes.length === 1 ? '' : 's') +
+      (at === steps.length - 1 ? ' still standing.' : ' standing at that point.') +
+      (prev && prev.codes.length > here.codes.length ? ' Struck-through ones fell to this answer.' : '') +
+      '</p>';
+
+    return out + '</div>';
+  }
+
+  /* =============================================================== MODALS */
+
+  function viewModal() {
+    if (!S.modal) return '';
+    var body = '';
+    if (S.modal === 'rules') body = rulesModal();
+    else if (S.modal === 'index') body = indexModal();
+    else if (S.modal === 'announce') body = announceModal();
+    else if (S.modal === 'reveal') body = revealModal();
+    else if (S.modal === 'share') body = shareModal();
+    else if (S.modal === 'ask') body = askModal();
+    var fresh = S.shownModal !== S.modal ? ' fresh' : '';
+    return '<div class="overlay' + fresh + '" data-action="overlay">' +
+      '<div class="modal" role="dialog" aria-modal="true">' + body + '</div></div>';
+  }
+
+  function rulesModal() {
+    return '<div class="panel-head"><h3 class="panel-title">How it plays</h3>' +
+      '<button class="btn btn-sm btn-ghost" data-action="close">Close</button></div><div class="panel-body">' +
+      '<p>A three-digit code is hiding: one <b style="color:var(--blue)">blue</b>, one <b style="color:var(--yellow)">yellow</b>, one <b style="color:var(--purple)">purple</b> digit, each from 1 to 5.</p>' +
+      '<h3>A round</h3><ul>' +
+      '<li>Set the three dials to a proposal.</li>' +
+      '<li>Test that proposal against up to <b>three</b> verifiers. Each answers only ✓ or ✗ — does this proposal satisfy my criterion?</li>' +
+      '<li>Cross options off each verifier’s list as you rule them out.</li>' +
+      '<li>Start a new round to change the dials. Your score is the number of rounds — fewer is better.</li>' +
+      '</ul>' +
+      '<h3>Winning</h3>' +
+      '<p>When you think you have it, hit <b>Announce answer</b>. Your code is put to every verifier at once. All ✓ and you have cracked it. Announcing spends a round, just as it does at the table.</p>' +
+      '<h3>Playing together</h3>' +
+      '<p>Share the puzzle code. Everyone runs their own board and their own notes — compare findings out loud, or race. Your progress is saved in this browser, so you can close the tab and come back.</p>' +
+      '<h3>Assist</h3>' +
+      '<p><em>Cross out</em> strikes the options your results have already disproved. <em>Show candidates</em> lists every code still standing. Both are legal deductions — they just save the pencil work.</p>' +
+      '</div><div class="modal-actions"><button class="btn btn-primary" data-action="close">Got it</button></div>';
+  }
+
+  function indexModal() {
+    return '<div class="panel-head"><h3 class="panel-title">Criteria card index</h3>' +
+      '<button class="btn btn-sm btn-ghost" data-action="close">Close</button></div>' +
+      '<div class="panel-body"><p style="margin-top:0">All 48 criteria cards, matching the numbers printed on your cards.</p>' +
+      '<div class="reveal-list" style="padding:0">' + DECK.cards.map(function (c) {
+        return '<div class="reveal-row"><div class="letter">' + c.id + '</div><div class="txt">' +
+          h(c.description || c.title) +
+          '<span class="index-art">' + art(VIS.cards[c.id], 'sm') + '</span>' +
+          '<span class="card-ref">' + c.verifiers.length + ' options</span></div></div>';
+      }).join('') + '</div></div>';
+  }
+
+  function announceModal() {
+    return '<div class="panel-head"><h3 class="panel-title">Announce your answer</h3>' +
+      '<button class="btn btn-sm btn-ghost" data-action="close">Close</button></div><div class="panel-body">' +
+      '<p style="margin-top:0">Put this code to every verifier at once. This ends the game.</p>' +
+      '<div class="reveal-code">' + CHANNELS.map(function (ch, i) {
+        return '<div class="readout-digit ' + ch.key + '">' + glyph(ch.shape, ch.key) +
+          '<span class="num">' + S.proposal[i] + '</span></div>';
+      }).join('') + '</div></div>' +
+      '<div class="modal-actions"><button class="btn btn-ghost" data-action="close">Not yet</button>' +
+      '<button class="btn btn-primary" data-action="confirm-announce">Submit answer</button></div>';
+  }
+
+  function revealModal() {
+    var f = S.finished;
+    var out = '<div class="verdict ' + (f.win ? 'win' : 'lose') + '">' +
+      '<div class="seal">' + (f.win ? '&#10003;' : '&#10007;') + '</div>' +
+      '<h2>' + (f.win ? 'Cracked it.' : 'Not this time.') + '</h2>' +
+      '<p class="sub">' + (f.win
+        ? (f.cold
+            ? 'Reasoned out with no questions asked' +
+              (f.rounds > 1 ? ', on guess ' + f.rounds + '.' : ', first guess.')
+            : 'Solved in ' + f.rounds + ' round' + (f.rounds === 1 ? '' : 's') +
+              ', the announcement included.')
+        : f.gaveUp
+          ? 'You asked to see it' + (f.rounds
+              ? ', after ' + f.rounds + ' guess' + (f.rounds === 1 ? '' : 'es') + '. '
+              : '. ') + 'The machine was set to:'
+          : 'You proposed ' + f.attempt.join(' ') + '. The machine was set to:') + '</p>' +
+      '<div class="reveal-code">' + CHANNELS.map(function (ch, i) {
+        return '<div class="readout-digit ' + ch.key + '">' + glyph(ch.shape, ch.key) +
+          '<span class="num">' + S.puzzle.solution[i] + '</span></div>';
+      }).join('') + '</div></div>';
+
+    out += '<div class="reveal-list">' + S.puzzle.cardIds.map(function (id, i) {
+      var v = DECK.get(id).verifiers[S.puzzle.variants[i]];
+      return '<div class="reveal-row"><div class="letter">' + LETTERS[i] + '</div><div class="txt">' +
+        h(v.text) + art(VIS.options[id][S.puzzle.variants[i]], 'sm') +
+        '<span class="card-ref">criteria card ' + id + '</span></div></div>';
+    }).join('') + '</div>';
+
+    out += '<div class="modal-actions">' +
+      '<button class="btn btn-ghost" data-action="close">Back to board</button>' +
+      '<button class="btn btn-primary" data-action="new-game">New machine</button></div>';
+    return out;
+  }
+
+  function askModal() {
+    var q = S.ask || {};
+    return '<div class="panel-head"><h3 class="panel-title">' + h(q.title || 'Are you sure?') + '</h3></div>' +
+      '<div class="panel-body"><p style="margin:0">' + h(q.body || '') + '</p></div>' +
+      '<div class="modal-actions">' +
+      '<button class="btn btn-ghost" data-action="close">' + h(q.cancel || 'Cancel') + '</button>' +
+      '<button class="btn btn-primary" data-action="ask-yes">' + h(q.ok || 'Yes') + '</button></div>';
+  }
+
+  function shareModal() {
+    var url = shareUrl();
+    return '<div class="panel-head"><h3 class="panel-title">Share this machine</h3>' +
+      '<button class="btn btn-sm btn-ghost" data-action="close">Close</button></div><div class="panel-body">' +
+      '<div class="field"><label>Puzzle code — safe to read aloud</label>' +
+      '<input class="input code-input" id="share-code" readonly value="' + h(S.shareCode) + '"></div>' +
+      '<div class="field"><label>Or send the link</label>' +
+      '<input class="input" id="share-url" readonly value="' + h(url) + '" style="font-size:12px"></div>' +
+      '<p class="hint">The code carries the cards <em>and</em> their hidden settings, so everyone solves the identical machine. It does not spoil anything — you cannot read the answer out of it.</p>' +
+      '</div><div class="modal-actions">' +
+      '<button class="btn" data-action="copy" data-what="code">Copy code</button>' +
+      '<button class="btn btn-primary" data-action="copy" data-what="url">Copy link</button></div>';
+  }
+
+  function shareUrl() {
+    return location.origin + location.pathname + location.search + '#p=' + S.shareCode.replace(/-/g, '');
+  }
+
+  /* =============================================================== RENDER */
+
+  function render() {
+    var root = document.getElementById('root');
+    var out = '';
+
+    out += '<header class="masthead"><div class="wordmark">' +
+      '<h1>Turing Machine</h1><span class="rule"></span>' +
+      '<span class="tag">' + (S.screen !== 'game' ? 'set up a session'
+        : S.finished ? (S.finished.win ? 'solved' : 'game over')
+        : 'session in progress') + '</span>' +
+      '</div><div class="masthead-tools">';
+    if (S.screen === 'game') {
+      out += '<button class="btn btn-sm" data-action="share">Share code</button>' +
+        '<button class="btn btn-sm btn-ghost" data-action="index">Cards</button>' +
+        '<button class="btn btn-sm btn-ghost" data-action="quit">New machine</button>';
+    } else {
+      out += '<button class="btn btn-sm btn-ghost" data-action="rules">How it plays</button>';
+    }
+    out += '<button class="theme-toggle" data-action="theme" title="Switch to ' +
+      (S.theme === 'dark' ? 'light' : 'dark') + ' theme" aria-label="Switch to ' +
+      (S.theme === 'dark' ? 'light' : 'dark') + ' theme">' +
+      (S.theme === 'dark' ? '&#9788;' : '&#9790;') + '</button>';
+    out += '</div></header>';
+
+    out += S.screen === 'setup' ? viewSetup() : viewGame();
+    out += viewModal();
+    if (S.toast) out += '<div class="toast">' + h(S.toast) + '</div>';
+
+    // Every action rebuilds the whole screen, which throws keyboard focus back
+    // to <body>. On the worksheet that means tabbing past 125 cells again after
+    // each mark, so put the caret back on the control that was just used.
+    var hold = focusKey(document.activeElement);
+
+    root.innerHTML = out;
+
+    if (hold && !S.modal) {
+      var back = root.querySelector(hold);
+      if (back) { try { back.focus({ preventScroll: true }); } catch (e) { back.focus(); } }
+    }
+    S.freshGame = false;
+    S.justTested = null;
+    S.shownModal = S.modal;
+  }
+
+  /* A selector that finds the same control again after a re-render. Actions are
+     told apart by whichever data-* the handlers read, so match on those. */
+  function focusKey(el) {
+    if (!el || el === document.body || !el.dataset || !el.dataset.action) return null;
+    var d = el.dataset, key = '[data-action="' + d.action + '"]';
+    ['slot', 'vi', 'i', 'k', 'ch', 'n', 'v', 'mode'].forEach(function (a) {
+      if (d[a] !== undefined) key += '[data-' + a + '="' + d[a] + '"]';
+    });
+    return key;
+  }
+
+  /* ================================================================ ACTIONS */
+
+  function startPuzzle(puzzle, opts) {
+    // A share code carries only cards and settings. Whether the set answers
+    // itself is a property of the cards, so derive it rather than encode it —
+    // a friend joining gets the same mode without a flag in the code.
+    if (puzzle.cold === undefined) {
+      var cn = E.coldness(DECK, puzzle);
+      puzzle.cold = cn.cold;
+      puzzle.ways = cn.ways;
+      puzzle.survivors = cn.survivors;
+      puzzle.searchSpace = cn.searchSpace;
+    }
+    S.puzzle = puzzle;
+    S.shareCode = E.encodePuzzle(puzzle);
+    S.legal = null;
+    S.rounds = [];
+    S.notes = {};
+    S.openNotes = {};
+    S.finished = null;
+    S.pendingRound = false;
+    S.attempts = [];
+    S.coldMiss = null;
+    S.grid = {};
+    S.gridOpen = false;
+    S.proposal = [1, 1, 1];
+    S.assist = 'off';
+    S.focusChannel = 0;
+    if (!(opts && opts.noRestore)) restore();
+    S.screen = 'game';
+    S.freshGame = true;
+    // The hash is for sharing. It is NOT what we reload from: inside an
+    // embedded frame the page comes back at its original src with the hash
+    // gone, which used to drop the player back on the setup screen.
+    try { history.replaceState(null, '', '#p=' + S.shareCode.replace(/-/g, '')); } catch (e) {}
+    try { localStorage.setItem(LAST_KEY, S.shareCode); } catch (e) {}
+    save();
+    render();
+  }
+
+  function doGenerate() {
+    var st = S.setup;
+    st.message = null;
+
+    if (st.mode === 'cold') {
+      st.busy = true; render();
+      setTimeout(function () {
+        try {
+          st.busy = false;
+          startPuzzle(E.generateColdPuzzle(DECK, { count: st.count, difficulty: st.coldLevel }));
+        } catch (err) {
+          st.busy = false;
+          st.message = { bad: true, text: 'Could not find a set that answers itself. Try again.' };
+          render();
+        }
+      }, 30);
+      return;
+    }
+
+    if (st.mode === 'official') {
+      var pairs = [];
+      for (var i = 0; i < st.official.length; i++) {
+        var c = parseInt(st.official[i][0], 10);
+        var v = parseInt(st.official[i][1], 10);
+        if (!c || !v) {
+          st.message = { bad: true, text: 'Fill in both numbers for verifier ' + LETTERS[i] + '.' };
+          return render();
+        }
+        pairs.push({ cardId: c, verification: v });
+      }
+      try {
+        startPuzzle(E.decodeOfficial(DECK, VERIF, pairs));
+      } catch (err) {
+        st.message = { bad: true, text: err.message };
+        render();
+      }
+      return;
+    }
+
+    if (st.mode !== 'random' && (st.chosen.length < 4 || st.chosen.length > 6)) {
+      st.message = { bad: true, text: 'Choose between 4 and 6 criteria cards — that is what the game supports.' };
+      return render();
+    }
+
+    st.busy = true; render();
+
+    setTimeout(function () {
+      try {
+        var puzzle;
+        if (st.mode === 'design') {
+          var variants = st.chosen.map(function (id) { return st.designVariants[id] || 0; });
+          var check = E.checkAssignment(DECK, st.chosen.map(function (id, i) {
+            return { cardId: id, variantIndex: variants[i] };
+          }));
+          if (!check.ok) {
+            st.busy = false;
+            st.message = { bad: true, text: check.reason === 'ambiguous'
+              ? 'Those settings leave ' + check.count + ' possible codes — a puzzle needs exactly one.'
+              : 'No code satisfies all of those at once.' };
+            return render();
+          }
+          puzzle = {
+            cardIds: st.chosen.slice(), variants: variants,
+            solution: check.solution, redundant: check.redundant,
+            relaxed: check.redundant ? 'redundant' : null
+          };
+        } else {
+          puzzle = E.generatePuzzle(DECK, st.mode === 'random'
+            ? { count: st.count }
+            : { cardIds: st.chosen.slice() });
+        }
+        st.busy = false;
+        startPuzzle(puzzle, { noRestore: false });
+      } catch (err) {
+        st.busy = false;
+        st.message = { bad: true, text: err.code === 'NO_LEGAL_ASSIGNMENT'
+          ? 'That set of cards cannot make a valid puzzle — no way to set them gives a single answer with every card mattering. Swap one out.'
+          : 'Could not build a puzzle from those cards. Try a different mix.' };
+        render();
+      }
+    }, 30);
+  }
+
+  function doJoin(codeStr) {
+    S.setup.joinCode = codeStr == null ? '' : String(codeStr);
+    try {
+      var puzzle = E.decodePuzzle(DECK, codeStr);
+      S.setup.joinError = null;
+      S.setup.joinCode = '';
+      startPuzzle(puzzle);
+    } catch (err) {
+      S.setup.joinError = err.message;
+      render();
+    }
+  }
+
+  function doTest(slot) {
+    if (S.finished) return;
+    var round = activeRound();
+    if (!round) {
+      S.rounds.push({ code: S.proposal.slice(), tests: [] });
+      S.pendingRound = false;
+      round = currentRound();
+    }
+    if (round.tests.length >= 3) return toast('Three tests is the limit this round');
+    if (round.tests.some(function (t) { return t.slot === slot; })) return;
+
+    var card = DECK.get(S.puzzle.cardIds[slot]);
+    var v = card.verifiers[S.puzzle.variants[slot]];
+    var answer = !!v.fn(round.code[0], round.code[1], round.code[2]);
+    round.tests.push({ slot: slot, answer: answer });
+    S.justTested = slot;
+    S.replayStep = null;
+    save();
+    render();
+  }
+
+  function doNextRound() {
+    if (!roundLocked()) return;
+    S.pendingRound = true;   // dials go live again; the round is spent on first test
+    S.focusChannel = 0;      // typed digits start at blue again
+    save();
+    render();
+  }
+
+  function doColdAnswer() {
+    var attempt = S.proposal.slice();
+    var win = attempt.join() === S.puzzle.solution.join();
+    if (!win && S.attempts.some(function (a) { return a.code.join() === attempt.join(); })) {
+      return toast('You already tried that one');
+    }
+    S.attempts.push({ code: attempt, win: win });
+    if (win) {
+      S.coldMiss = null;
+      S.finished = { win: true, rounds: S.attempts.length, attempt: attempt, cold: true };
+      S.modal = 'reveal';
+    } else {
+      /* A wrong guess costs a guess and nothing else. Finishing the puzzle here
+         would freeze the dials and — because the board reveals every setting
+         once it is finished — hand over the answer for a single miss. */
+      S.coldMiss = attempt.join(' ') + ' is not it. Some verifier would have to be idle, or two ' +
+        'codes would fit. Keep going — nothing is lost.';
+    }
+    save();
+    render();
+  }
+
+  function doAnnounce() {
+    var attempt = S.proposal.slice();
+    var tests = S.puzzle.cardIds.map(function (id, i) {
+      var v = DECK.get(id).verifiers[S.puzzle.variants[i]];
+      return { slot: i, answer: !!v.fn(attempt[0], attempt[1], attempt[2]) };
+    });
+    var win = tests.every(function (t) { return t.answer; });
+    S.rounds.push({ code: attempt, tests: tests, final: true });
+    S.replayStep = null;     // the announcement is news — show it, not wherever we were parked
+    S.finished = { win: win, rounds: S.rounds.length, attempt: attempt };
+    S.modal = 'reveal';
+    save();
+    render();
+  }
+
+  /* ------------------------------------------------------------ delegation */
+
+  document.addEventListener('click', function (ev) {
+    var el = ev.target && ev.target.closest && ev.target.closest('[data-action]');
+    if (!el) return;
+    var a = el.dataset.action;
+
+    if (a === 'overlay') {
+      if (ev.target === el && S.modal !== 'reveal') { S.modal = null; S.ask = null; render(); }
+      return;
+    }
+
+    switch (a) {
+      case 'mode':
+        S.setup.mode = el.dataset.mode; S.setup.message = null; render(); break;
+      case 'count':
+        S.setup.count = +el.dataset.n; render(); break;
+      case 'cold-level':
+        S.setup.coldLevel = el.dataset.v; render(); break;
+      case 'pick-card': {
+        var id = +el.dataset.id;
+        var i = S.setup.chosen.indexOf(id);
+        if (i === -1) {
+          if (S.setup.chosen.length >= 6) return toast('Six verifiers is the maximum');
+          S.setup.chosen.push(id);
+        } else S.setup.chosen.splice(i, 1);
+        S.setup.message = null;
+        render();
+        break;
+      }
+      case 'read-paste': {
+        try {
+          var got = E.parseOfficialPaste(S.setup.paste);
+          while (S.setup.official.length > got.length) S.setup.official.pop();
+          while (S.setup.official.length < got.length) S.setup.official.push(['', '']);
+          got.forEach(function (g, i) {
+            S.setup.official[i] = [String(g.cardId), String(g.verification)];
+          });
+          S.setup.paste = '';
+          S.setup.message = { bad: false, text: 'Read in ' + got.length + ' verifiers — ' +
+            'check them against the site, then start the machine.' };
+        } catch (err) {
+          S.setup.message = { bad: true, text: err.message };
+        }
+        render();
+        break;
+      }
+      case 'official-row': {
+        var d = +el.dataset.d;
+        if (d > 0 && S.setup.official.length < 6) S.setup.official.push(['', '']);
+        if (d < 0 && S.setup.official.length > 4) S.setup.official.splice(+el.dataset.i, 1);
+        S.setup.message = null; render();
+        break;
+      }
+      case 'clear-official':
+        S.setup.official = [['', ''], ['', ''], ['', ''], ['', ''], ['', '']];
+        S.setup.paste = '';
+        S.setup.message = null; render();
+        break;
+      case 'clear-cards':
+        S.setup.chosen = []; S.setup.designVariants = {}; S.setup.message = null; render(); break;
+      case 'generate': doGenerate(); break;
+      case 'join': doJoin((document.getElementById('join-code') || {}).value); break;
+
+      case 'dial': {
+        if (roundLocked() || S.finished) return;
+        S.proposal[+el.dataset.ch] = +el.dataset.n;
+        S.focusChannel = (+el.dataset.ch + 1) % 3;  // keep typing in step with clicking
+        save(); render();
+        break;
+      }
+      case 'test': doTest(+el.dataset.slot); break;
+      case 'next-round': doNextRound(); break;
+      case 'notes':
+        S.openNotes[el.dataset.slot] = !notesOpen(el.dataset.slot); save(); render(); break;
+      case 'strike': {
+        if (S.finished) return;
+        var slot = el.dataset.slot, vi = el.dataset.vi;
+        S.notes[slot] = S.notes[slot] || {};
+        if (S.notes[slot][vi]) delete S.notes[slot][vi]; else S.notes[slot][vi] = true;
+        save(); render();
+        break;
+      }
+      case 'assist': S.assist = el.dataset.v; S.replayStep = null; save(); render(); break;
+      case 'grid-toggle': S.gridOpen = !S.gridOpen; save(); render(); break;
+      case 'grid-mark': {
+        var gi = el.dataset.i;
+        if (S.grid[gi]) delete S.grid[gi]; else S.grid[gi] = 1;
+        save(); render();
+        break;
+      }
+      case 'grid-clear':
+        ask({
+          title: 'Rub out every mark?',
+          body: 'All 125 codes come back. The options you crossed off the cards are not affected.',
+          ok: 'Rub out',
+          run: function () { S.grid = {}; save(); render(); }
+        });
+        break;
+      case 'replay': S.replayStep = +el.dataset.i; render(); break;
+      case 'theme':
+        S.theme = S.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', S.theme);
+        try { localStorage.setItem('turing:theme', S.theme); } catch (e) {}
+        render();
+        break;
+      case 'announce':
+        if (isCold()) { doColdAnswer(); break; }
+        S.modal = 'announce'; render(); break;
+      case 'confirm-announce': S.modal = null; doAnnounce(); break;
+      case 'give-up':
+        if (S.finished) return;
+        ask({
+          title: 'Show the answer?',
+          body: 'This ends the puzzle — you will see the code and how every card was set.',
+          ok: 'Show me',
+          run: function () {
+            /* Not an attempt — you never guessed it, so it does not belong in
+               the list of codes you tried, nor in the guess count. */
+            S.coldMiss = null;
+            S.finished = { win: false, rounds: S.attempts.length,
+              attempt: S.puzzle.solution.slice(), cold: true, gaveUp: true };
+            S.modal = 'reveal'; save(); render();
+          }
+        });
+        break;
+      case 'ask-yes': {
+        var run = S.ask && S.ask.run;
+        S.ask = null; S.modal = null;
+        if (run) run(); else render();
+        break;
+      }
+      case 'reveal': S.modal = 'reveal'; render(); break;
+      case 'rules': S.modal = 'rules'; render(); break;
+      case 'index': S.modal = 'index'; render(); break;
+      case 'share': S.modal = 'share'; render(); break;
+      case 'close': S.modal = null; S.ask = null; render(); break;
+      case 'copy': {
+        var text = el.dataset.what === 'url' ? shareUrl() : S.shareCode;
+        copy(text);
+        break;
+      }
+      case 'new-game':
+      case 'quit': {
+        var leave = function () {
+          S.ask = null;
+          S.modal = null; S.screen = 'setup'; S.puzzle = null; S.shareCode = null;
+          S.setup.message = null; S.setup.joinError = null;
+          forgetLast();
+          try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+          render();
+        };
+        var busy = !S.finished && (S.rounds.length || S.attempts.length);
+        if (a === 'quit' && busy) {
+          ask({
+            title: 'Leave this machine?',
+            body: 'Your notes are saved — the same puzzle code brings you right back to them.',
+            ok: 'Leave',
+            run: leave
+          });
+          return;
+        }
+        leave();
+        break;
+      }
+    }
+  });
+
+  document.addEventListener('input', function (ev) {
+    var pasteEl = ev.target && ev.target.closest && ev.target.closest('[data-action="paste-in"]');
+    if (pasteEl) { S.setup.paste = pasteEl.value; return; }
+    var el = ev.target && ev.target.closest && ev.target.closest('[data-action="official-in"]');
+    if (!el) return;
+    S.setup.official[+el.dataset.i][+el.dataset.k] = el.value.replace(/[^0-9]/g, '');
+    S.setup.message = null;
+  });
+
+  document.addEventListener('paste', function (ev) {
+    var el = ev.target && ev.target.closest && ev.target.closest('[data-action="paste-in"]');
+    if (!el) return;
+    setTimeout(function () {
+      S.setup.paste = el.value;
+      var btn = document.querySelector('[data-action="read-paste"]');
+      if (btn) btn.click();
+    }, 0);
+  });
+
+  document.addEventListener('change', function (ev) {
+    var el = ev.target && ev.target.closest && ev.target.closest('[data-action="design-variant"]');
+    if (!el) return;
+    var id = S.setup.chosen[+el.dataset.slot];
+    S.setup.designVariants[id] = +el.value;
+    S.setup.message = null;
+    render();   // otherwise a stale "impossible settings" warning stays on screen
+  });
+
+  /* The whole screen is re-rendered on every action, so anything typed into an
+     input has to live in state or it vanishes on the next click. */
+  document.addEventListener('input', function (ev) {
+    if (ev.target && ev.target.id === 'join-code') S.setup.joinCode = ev.target.value;
+  });
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.target && ev.target.matches && ev.target.matches('input, select, textarea')) {
+      if (ev.key === 'Enter' && ev.target.id === 'join-code') doJoin(ev.target.value);
+      return;
+    }
+    if (ev.key === 'Escape' && S.modal) { S.modal = null; S.ask = null; render(); return; }
+    if (S.screen !== 'game' || S.modal || S.finished || roundLocked()) return;
+    if (/^[1-5]$/.test(ev.key)) {
+      S.proposal[S.focusChannel] = +ev.key;
+      S.focusChannel = (S.focusChannel + 1) % 3;
+      save(); render();
+    }
+  });
+
+  function copy(text) {
+    var done = function () { toast('Copied'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else fallback();
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { toast('Copy failed — select it by hand'); }
+      document.body.removeChild(ta);
+    }
+  }
+
+  /* ---------------------------------------------------------------- boot */
+
+  function boot() {
+    var m = /[#&]p=([A-Za-z0-9-]+)/.exec(location.hash);
+    if (m) {
+      try { startPuzzle(E.decodePuzzle(DECK, m[1])); return; }
+      catch (e) { S.setup.joinError = e.message; }
+    }
+    // No puzzle in the URL — pick up whatever machine was last open, so a
+    // refresh returns to the game rather than to the setup screen.
+    var last = null;
+    try { last = localStorage.getItem(LAST_KEY); } catch (e) {}
+    if (last) {
+      try { startPuzzle(E.decodePuzzle(DECK, last)); return; }
+      catch (e) { forgetLast(); }
+    }
+    render();
+  }
+
+  function forgetLast() {
+    try { localStorage.removeItem(LAST_KEY); } catch (e) {}
+  }
+
+  window.addEventListener('hashchange', function () {
+    var m = /[#&]p=([A-Za-z0-9-]+)/.exec(location.hash);
+    if (m) {
+      try {
+        var pz = E.decodePuzzle(DECK, m[1]);
+        if (E.encodePuzzle(pz) !== S.shareCode) startPuzzle(pz);
+      } catch (e) { /* ignore bad hash */ }
+    }
+  });
+
+  boot();
+})();
+
+</script>
+
+</body>
+</html>
